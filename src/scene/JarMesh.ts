@@ -14,6 +14,8 @@ export const JAR_BODY_HEIGHT = 2.09;
 export const JAR_HALF_WIDTH = 0.78;
 /** Local Y of the top edge of the fully unfolded hero paper. */
 export const JAR_PAPER_TOP = 3.05;
+/** Maximum number of folded paper notes rendered inside a 100%-full jar (`all`). */
+export const MAX_INTERIOR_NOTES = 56;
 
 const BODY_BOTTOM_RADIUS = 0.72;
 const BODY_TOP_RADIUS = 0.66;
@@ -22,6 +24,10 @@ const SHOULDER_HEIGHT = 0.36;
 const NECK_RADIUS = 0.37;
 const NECK_HEIGHT = 0.28;
 const RIM_Y = BODY_HEIGHT + SHOULDER_HEIGHT + NECK_HEIGHT; // 1.89
+
+const MIN_NOTE_Y = 0.14;
+const MAX_NOTE_Y = 1.48;
+const GOLDEN_ANGLE = 2.399963229728653;
 
 const LABEL_Y = 0.62;
 const LABEL_WIDTH = 1.2;
@@ -35,11 +41,12 @@ const CORK_OPEN = new THREE.Vector3(0.82, 2.62, -0.02);
 const HERO_LEAF_W = 0.66;
 const HERO_LEAF_H = 0.44;
 const FOLD_MAX = Math.PI * 0.88;
-const HERO_REST_POS = new THREE.Vector3(0.02, 0.92, 0.08);
 const HERO_EXTRACT_POS = new THREE.Vector3(0.0, 2.3, 0.3);
 const HERO_UNFOLD_POS = new THREE.Vector3(0.0, 2.5, 0.55);
 
-const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value));
+const clamp01 = (value: number): number => clamp(value, 0, 1);
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 const easeInOutCubic = (t: number): number =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -98,8 +105,8 @@ interface PaperNote {
 
 /**
  * A single low-poly pixel-art jar: faceted translucent glass, cork stopper,
- * parchment label, tumbled interior notes and the hinged hero paper that
- * unfolds toward the viewer.
+ * parchment label, stratified interior notes scaled to relative item count,
+ * and the hinged hero paper that unfolds toward the viewer.
  */
 export class JarMesh {
   readonly config: JarConfig;
@@ -115,6 +122,7 @@ export class JarMesh {
   private readonly corkGroup = new THREE.Group();
   private readonly papersGroup = new THREE.Group();
   private readonly heroPaperGroup = new THREE.Group();
+  private readonly heroRestPos = new THREE.Vector3(0.02, 0.92, 0.08);
   private readonly heroPosition = new THREE.Vector3();
   private readonly papers: PaperNote[] = [];
   private labelMesh!: THREE.Mesh;
@@ -131,12 +139,15 @@ export class JarMesh {
   private shakeIntensity = 0;
   private shakeDuration = 0.55;
 
+  private visibleNoteCount = 0;
+  private hasItems = true;
+
   private corkT = 0;
   private corkBaseY = CORK_CLOSED.y;
   private corkBaseRotZ = 0;
   private extractT = 0;
   private unfoldT = 0;
-  private heroBaseY = HERO_REST_POS.y;
+  private heroBaseY = 0.92;
   private heroBaseRotZ = 0;
 
   constructor(config: JarConfig) {
@@ -156,6 +167,8 @@ export class JarMesh {
     this.buildCork();
     this.hitMesh = this.buildHitMesh();
 
+    // `all` starts visually full (1.0); category jars start mid-full until CSV counts resolve.
+    this.setFillLevel(config.id === 'all' ? 1 : 0.45);
     this.resetPose();
   }
 
@@ -349,19 +362,46 @@ export class JarMesh {
     return material;
   }
 
+  /**
+   * Pre-generate a bottom-to-top stratified stack of `MAX_INTERIOR_NOTES` folded
+   * slips hugging the jar's inner profile. `setFillLevel()` reveals the bottom N
+   * slips so pile height and visual card density track relative item count directly.
+   */
   private buildInteriorPapers(): void {
     const random = mulberry32(hashString(this.config.id));
     const colors = this.config.paperColors;
     const geometry = createFoldedSlipGeometry(0.34, 0.26, 0.07);
-    const count = 14 + Math.floor(random() * 5); // 14 - 18 notes
+    const facetApothemRatio = Math.cos(Math.PI / 10);
+    const angleOffset = random() * Math.PI * 2;
 
-    for (let i = 0; i < count; i += 1) {
+    for (let i = 0; i < MAX_INTERIOR_NOTES; i += 1) {
       const color = colors[Math.floor(random() * colors.length) % colors.length];
       const note = new THREE.Mesh(geometry, this.paperMaterial(color));
 
-      const angle = random() * Math.PI * 2;
-      const radius = Math.sqrt(random()) * 0.4;
-      const y = 0.14 + random() * 0.88;
+      const s = (i + 0.5) / MAX_INTERIOR_NOTES;
+      const y = clamp(
+        lerp(MIN_NOTE_Y, MAX_NOTE_Y, s) + (random() - 0.5) * 0.035,
+        0.12,
+        1.5,
+      );
+
+      const glassRadius =
+        y <= BODY_HEIGHT
+          ? lerp(BODY_BOTTOM_RADIUS, BODY_TOP_RADIUS, y / BODY_HEIGHT)
+          : lerp(
+              BODY_TOP_RADIUS,
+              NECK_RADIUS,
+              clamp01((y - BODY_HEIGHT) / SHOULDER_HEIGHT),
+            );
+
+      const shoulderT = y > BODY_HEIGHT ? clamp01((y - BODY_HEIGHT) / 0.26) : 0;
+      const noteScale = (0.86 + random() * 0.34) * lerp(1.0, 0.76, shoulderT);
+      const apothem = glassRadius * facetApothemRatio;
+      const maxCenterRadius = Math.max(0.05, apothem - 0.185 * noteScale);
+
+      // Golden-angle spiral + radial perimeter bias keeps every fill level balanced 360°.
+      const angle = angleOffset + i * GOLDEN_ANGLE + (random() - 0.5) * 0.65;
+      const radius = (0.2 + 0.8 * Math.sqrt(random())) * maxCenterRadius;
 
       note.position.set(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
       const base = new THREE.Euler(
@@ -370,12 +410,13 @@ export class JarMesh {
         (random() - 0.5) * 1.4,
       );
       note.rotation.copy(base);
-      note.scale.setScalar(0.85 + random() * 0.4);
+      note.scale.setScalar(noteScale);
 
       this.papers.push({ mesh: note, base, phase: random() * Math.PI * 2 });
       this.papersGroup.add(note);
     }
 
+    this.papers.sort((a, b) => a.mesh.position.y - b.mesh.position.y);
     this.visualRoot.add(this.papersGroup);
   }
 
@@ -466,8 +507,39 @@ export class JarMesh {
   }
 
   // ---------------------------------------------------------------------------
-  // Animation API
+  // Fill level & Animation API
   // ---------------------------------------------------------------------------
+
+  /**
+   * Set the visual fullness of the jar (`fillRatio` in `[0, 1]`).
+   * - `itemCount === 0` or `fillRatio <= 0` empties the jar completely (`0` slips).
+   * - Non-empty jars reveal between `1` and `MAX_INTERIOR_NOTES` slips from the bottom up,
+   *   and nestle the hero slip right onto the top of the current pile.
+   */
+  setFillLevel(fillRatio: number, itemCount?: number): void {
+    const ratio = clamp01(fillRatio);
+    const isEmpty = (itemCount !== undefined && itemCount <= 0) || ratio <= 0;
+
+    const targetCount = isEmpty
+      ? 0
+      : Math.max(1, Math.min(MAX_INTERIOR_NOTES, Math.round(ratio * MAX_INTERIOR_NOTES)));
+
+    this.visibleNoteCount = targetCount;
+    this.hasItems = targetCount > 0;
+
+    for (let i = 0; i < this.papers.length; i += 1) {
+      this.papers[i].mesh.visible = i < targetCount;
+    }
+
+    const pileTopY =
+      targetCount > 0 ? this.papers[targetCount - 1].mesh.position.y : MIN_NOTE_Y;
+    this.heroRestPos.set(0.02, clamp(pileTopY - 0.04, 0.16, 1.18), 0.08);
+    this.setPaperState(this.extractT, this.unfoldT);
+  }
+
+  getVisibleNoteCount(): number {
+    return this.visibleNoteCount;
+  }
 
   setHovered(hovered: boolean): void {
     this.hoverTarget = hovered ? 0.09 : 0;
@@ -502,8 +574,9 @@ export class JarMesh {
     this.visualRoot.position.set(shakeX, this.hoverLift + bob + shakeY, 0);
     this.visualRoot.rotation.z = roll;
 
-    // Jostle every folded note inside the jar.
-    for (const note of this.papers) {
+    // Jostle visible folded notes inside the jar.
+    for (let i = 0; i < this.visibleNoteCount; i += 1) {
+      const note = this.papers[i];
       if (amp > 0.0005) {
         note.mesh.rotation.set(
           note.base.x + Math.sin(timeSec * 31 + note.phase) * 0.24 * amp,
@@ -527,8 +600,8 @@ export class JarMesh {
       this.corkGroup.rotation.z = this.corkBaseRotZ;
     }
 
-    // Tiny sway while the hero note is still tucked inside the jar.
-    if (this.extractT < 0.001 && this.unfoldT < 0.001) {
+    // Tiny sway while the hero note is tucked inside a non-empty jar.
+    if (this.hasItems && this.extractT < 0.001 && this.unfoldT < 0.001) {
       this.heroPaperGroup.rotation.z =
         this.heroBaseRotZ + Math.sin(timeSec * 1.15 + this.seed * 6) * 0.03;
       this.heroPaperGroup.position.y =
@@ -570,11 +643,14 @@ export class JarMesh {
     this.extractT = extract;
     this.unfoldT = unfold;
 
+    this.heroPaperGroup.visible = this.hasItems;
+    if (!this.hasItems) return;
+
     const e = easeInOutCubic(extract);
     const u = easeInOutCubic(unfold);
 
     this.heroPosition
-      .copy(HERO_REST_POS)
+      .copy(this.heroRestPos)
       .lerp(HERO_EXTRACT_POS, e)
       .lerp(HERO_UNFOLD_POS, u);
 

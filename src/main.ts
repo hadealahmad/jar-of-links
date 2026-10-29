@@ -31,6 +31,11 @@ function bootstrap(): void {
   let activeDraw: ActiveDrawState | null = null;
   let stage: JarStage | null = null;
 
+  const syncJarCounts = (counts: Partial<Record<JarId, number>>): void => {
+    hud.updateJarCounts(counts);
+    stage?.updateJarCounts(counts);
+  };
+
   const startDraw = (jarId: JarId): ActiveDrawState => {
     const token = ++drawCounter;
     const jarConfig = JAR_BY_ID[jarId];
@@ -46,7 +51,7 @@ function bootstrap(): void {
     state.promise = (async (): Promise<ResolvedLinkPreview | null> => {
       try {
         const entry = await jarStore.drawRandom(jarId);
-        hud.updateJarCounts(jarStore.getAllCounts());
+        syncJarCounts(jarStore.getAllCounts());
         if (!entry) return null;
         return await resolveLinkPreview(entry, jarConfig);
       } catch (err) {
@@ -153,9 +158,9 @@ function bootstrap(): void {
     },
   });
 
-  // Preload all 5 CSV files in the background so first jar click opens with zero fetch delay
+  // Preload the shared links.csv immediately so jar fill levels reflect actual item counts
   void jarStore.preloadAll().then((counts) => {
-    hud.updateJarCounts(counts);
+    syncJarCounts(counts);
   });
 
   if (import.meta.hot) {

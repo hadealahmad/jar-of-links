@@ -1,4 +1,15 @@
-import type { JarConfig, JarId } from '../types';
+import type { JarConfig, JarId, LinkType } from '../types';
+
+/** Shared static CSV containing all links with a `type` column. */
+export const LINKS_CSV_PATH = './data/links.csv';
+
+/** Non-`all` category jar IDs corresponding to `type` values in `links.csv`. */
+export const CATEGORY_JAR_IDS: readonly LinkType[] = [
+  'youtube',
+  'articles',
+  'recommendations',
+  'others',
+] as const;
 
 /**
  * Canonical definitions for the 5 jars (Arabic UI).
@@ -12,7 +23,7 @@ export const JAR_CONFIGS: readonly JarConfig[] = [
     id: 'youtube',
     label: 'يوتيوب',
     shortLabel: 'يوتيوب',
-    csvPath: './data/youtube.csv',
+    csvPath: LINKS_CSV_PATH,
     scale: 1.0,
     glassTint: '#d8e8f2',
     accentColor: '#e05263',
@@ -24,7 +35,7 @@ export const JAR_CONFIGS: readonly JarConfig[] = [
     id: 'articles',
     label: 'مقالات',
     shortLabel: 'مقالات',
-    csvPath: './data/articles.csv',
+    csvPath: LINKS_CSV_PATH,
     scale: 1.0,
     glassTint: '#c9e8f8',
     accentColor: '#0582ca',
@@ -36,7 +47,7 @@ export const JAR_CONFIGS: readonly JarConfig[] = [
     id: 'all',
     label: 'الكل',
     shortLabel: 'الكل',
-    csvPath: './data/all.csv',
+    csvPath: LINKS_CSV_PATH,
     scale: 1.38,
     glassTint: '#d7eefb',
     accentColor: '#0582ca',
@@ -48,7 +59,7 @@ export const JAR_CONFIGS: readonly JarConfig[] = [
     id: 'recommendations',
     label: 'توصيات',
     shortLabel: 'توصيات',
-    csvPath: './data/recommendations.csv',
+    csvPath: LINKS_CSV_PATH,
     scale: 1.0,
     glassTint: '#c9eff2',
     accentColor: '#0d9488',
@@ -60,7 +71,7 @@ export const JAR_CONFIGS: readonly JarConfig[] = [
     id: 'others',
     label: 'أخرى',
     shortLabel: 'أخرى',
-    csvPath: './data/others.csv',
+    csvPath: LINKS_CSV_PATH,
     scale: 1.0,
     glassTint: '#d5e3ec',
     accentColor: '#006494',

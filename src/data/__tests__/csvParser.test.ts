@@ -4,8 +4,8 @@
 // @ts-nocheck
 import { afterEach, describe, expect, test } from 'bun:test';
 import { JAR_BY_ID } from '../../config/jars';
-import { parseLinksCsv } from '../csvParser';
-import { JarStore } from '../jarStore';
+import { normalizeLinkType, parseLinksCsv } from '../csvParser';
+import { computeJarFillRatios, JarStore, MAX_CATEGORY_FILL_RATIO } from '../jarStore';
 import { extractYouTubeId, resolveLinkPreview } from '../ogResolver';
 
 const realFetch = globalThis.fetch;
@@ -26,18 +26,19 @@ function jsonResponse(payload: unknown): Response {
 }
 
 describe('parseLinksCsv', () => {
-  test('parses a 5-column RFC-4180 CSV with BOM, quoted commas, escaped quotes and CRLF', () => {
+  test('parses a 6-column RFC-4180 CSV (url,type,title,description,image,site_name) with BOM, quoted commas, escaped quotes and CRLF', () => {
     const csv =
-      '\uFEFFurl,title,description,image,site_name\r\n' +
-      'https://example.com/first,"Hello, world","First line\nSecond ""quoted"" line","https://images.example.com/one.png","Example Site"\r\n' +
+      '\uFEFFurl,type,title,description,image,site_name\r\n' +
+      'https://example.com/first,articles,"Hello, world","First line\nSecond ""quoted"" line","https://images.example.com/one.png","Example Site"\r\n' +
       '\r\n' +
-      'https://example.com/second,Plain title,Plain description,,\r\n';
+      'https://example.com/second,recommendations,Plain title,Plain description,,\r\n';
 
     const entries = parseLinksCsv(csv);
 
     expect(entries).toHaveLength(2);
     expect(entries[0]).toEqual({
       url: 'https://example.com/first',
+      type: 'articles',
       title: 'Hello, world',
       description: 'First line\nSecond "quoted" line',
       image: 'https://images.example.com/one.png',
@@ -45,6 +46,7 @@ describe('parseLinksCsv', () => {
     });
     expect(entries[1]).toEqual({
       url: 'https://example.com/second',
+      type: 'recommendations',
       title: 'Plain title',
       description: 'Plain description',
       image: undefined,
@@ -52,63 +54,66 @@ describe('parseLinksCsv', () => {
     });
   });
 
-  test('maps columns case-insensitively using header aliases', () => {
+  test('maps columns case-insensitively using header aliases and normalizes English/Arabic types', () => {
     const csv = [
-      'LINK,DESC,THUMBNAIL,SITE',
-      'https://example.com/post,A nice description,https://cdn.example.com/p.png,Example',
-    ].join('\n');
-
-    const [entry] = parseLinksCsv(csv);
-
-    expect(entry.url).toBe('https://example.com/post');
-    expect(entry.title).toBeUndefined();
-    expect(entry.description).toBe('A nice description');
-    expect(entry.image).toBe('https://cdn.example.com/p.png');
-    expect(entry.siteName).toBe('Example');
-  });
-
-  test('parses a headerless one-column bare URL list and ignores comments/blank lines', () => {
-    const csv = [
-      '# My bookmarks',
-      'https://example.com/one',
-      '',
-      'www.github.com',
-      '   ',
-      'https://news.ycombinator.com/item?id=42',
-      '# trailing comment, with commas',
-    ].join('\n');
-
-    const entries = parseLinksCsv(csv);
-
-    expect(entries.map((entry) => entry.url)).toEqual([
-      'https://example.com/one',
-      'https://www.github.com/',
-      'https://news.ycombinator.com/item?id=42',
-    ]);
-    expect(entries[0]).toEqual({
-      url: 'https://example.com/one',
-      title: undefined,
-      description: undefined,
-      image: undefined,
-      siteName: undefined,
-    });
-  });
-
-  test('parses headerless positional rows (url,title,description,image,siteName)', () => {
-    const csv = [
-      'https://example.com/a,"Title, with comma",Description,https://img.example.com/a.jpg,Site A',
-      'https://example.com/b,,, ,',
+      'CATEGORY,LINK,DESC,THUMBNAIL,SITE',
+      'مقالات,https://example.com/post,A nice description,https://cdn.example.com/p.png,Example',
+      'recs,https://example.com/tool,Handy tool,,ToolSite',
     ].join('\n');
 
     const entries = parseLinksCsv(csv);
 
     expect(entries).toHaveLength(2);
+    expect(entries[0]).toEqual({
+      url: 'https://example.com/post',
+      type: 'articles',
+      title: undefined,
+      description: 'A nice description',
+      image: 'https://cdn.example.com/p.png',
+      siteName: 'Example',
+    });
+    expect(entries[1].type).toBe('recommendations');
+  });
+
+  test('infers type when omitted (youtube URLs -> youtube, others -> others) and ignores comments/blank lines', () => {
+    const csv = [
+      '# My bookmarks',
+      'https://youtu.be/dQw4w9WgXcQ',
+      '',
+      'www.github.com',
+      '   ',
+      'https://news.ycombinator.com/item?id=42,articles',
+      '# trailing comment, with commas',
+    ].join('\n');
+
+    const entries = parseLinksCsv(csv);
+
+    expect(entries.map((entry) => ({ url: entry.url, type: entry.type }))).toEqual([
+      { url: 'https://youtu.be/dQw4w9WgXcQ', type: 'youtube' },
+      { url: 'https://www.github.com/', type: 'others' },
+      { url: 'https://news.ycombinator.com/item?id=42', type: 'articles' },
+    ]);
+    expect(normalizeLinkType('', 'https://www.youtube.com/watch?v=c63KFuxi_IU')).toBe('youtube');
+    expect(normalizeLinkType(undefined, 'https://example.com')).toBe('others');
+  });
+
+  test('parses headerless positional rows with or without an explicit type column', () => {
+    const csv = [
+      'https://example.com/a,recommendations,"Title, with comma",Description,https://img.example.com/a.jpg,Site A',
+      'https://example.com/b,Legacy Title,,,',
+    ].join('\n');
+
+    const entries = parseLinksCsv(csv);
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0].type).toBe('recommendations');
     expect(entries[0].title).toBe('Title, with comma');
     expect(entries[0].siteName).toBe('Site A');
     expect(entries[0].image).toBe('https://img.example.com/a.jpg');
     expect(entries[1]).toEqual({
       url: 'https://example.com/b',
-      title: undefined,
+      type: 'others',
+      title: 'Legacy Title',
       description: undefined,
       image: undefined,
       siteName: undefined,
@@ -117,15 +122,15 @@ describe('parseLinksCsv', () => {
 
   test('normalizes www. URLs and filters malformed or non-http(s) URLs', () => {
     const csv = [
-      'url,title',
-      'www.example.com/path,Valid www',
-      'https://example.com/ok,Valid https',
-      'ftp://example.com/file,Invalid protocol',
-      'mailto:someone@example.com,Invalid mailto',
-      'javascript:alert(1),Invalid javascript',
-      'not a url,Invalid text',
-      'example.com/no-scheme,Missing scheme',
-      ',Empty URL',
+      'url,type,title',
+      'www.example.com/path,articles,Valid www',
+      'https://example.com/ok,others,Valid https',
+      'ftp://example.com/file,others,Invalid protocol',
+      'mailto:someone@example.com,others,Invalid mailto',
+      'javascript:alert(1),others,Invalid javascript',
+      'not a url,others,Invalid text',
+      'example.com/no-scheme,others,Missing scheme',
+      ',others,Empty URL',
     ].join('\n');
 
     const entries = parseLinksCsv(csv);
@@ -139,7 +144,7 @@ describe('parseLinksCsv', () => {
 
   test('returns an empty array for empty input and header-only files', () => {
     expect(parseLinksCsv('')).toEqual([]);
-    expect(parseLinksCsv('url,title,description,image,site_name')).toEqual([]);
+    expect(parseLinksCsv('url,type,title,description,image,site_name')).toEqual([]);
     expect(parseLinksCsv('\uFEFF\n\n# only comments\n')).toEqual([]);
   });
 });
@@ -173,7 +178,7 @@ describe('resolveLinkPreview', () => {
     });
 
     const preview = await resolveLinkPreview(
-      { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+      { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', type: 'youtube' },
       JAR_BY_ID.youtube,
     );
 
@@ -202,7 +207,10 @@ describe('resolveLinkPreview', () => {
       }),
     );
 
-    const preview = await resolveLinkPreview({ url: 'https://example.com/article' }, JAR_BY_ID.articles);
+    const preview = await resolveLinkPreview(
+      { url: 'https://example.com/article', type: 'articles' },
+      JAR_BY_ID.articles,
+    );
 
     expect(preview.title).toBe('OG Title');
     expect(preview.description).toBe('OG Description');
@@ -218,7 +226,7 @@ describe('resolveLinkPreview', () => {
     });
 
     const preview = await resolveLinkPreview(
-      { url: 'https://example.com/some/cool-article' },
+      { url: 'https://example.com/some/cool-article', type: 'articles' },
       JAR_BY_ID.articles,
     );
 
@@ -240,6 +248,7 @@ describe('resolveLinkPreview', () => {
     const preview = await resolveLinkPreview(
       {
         url: 'https://example.com/ready',
+        type: 'others',
         title: 'Ready Title',
         description: 'Ready Description',
         image: 'https://example.com/ready.png',
@@ -256,93 +265,138 @@ describe('resolveLinkPreview', () => {
   });
 });
 
-describe('JarStore', () => {
-  const threeLinksCsv = [
-    'url,title',
-    'https://example.com/a,Alpha',
-    'https://example.com/b,Beta',
-    'https://example.com/c,Gamma',
+describe('JarStore & computeJarFillRatios', () => {
+  const sharedCsv = [
+    'url,type,title',
+    'https://www.youtube.com/watch?v=c63KFuxi_IU,youtube,YT 1',
+    'https://www.youtube.com/watch?v=Qz0KTGYJtUk,youtube,YT 2',
+    'https://www.youtube.com/watch?v=WUlgvNe4BLU,youtube,YT 3',
+    'https://example.com/art-1,articles,Article 1',
+    'https://example.com/art-2,articles,Article 2',
+    'https://example.com/rec-1,recommendations,Rec 1',
   ].join('\n');
 
-  test('loads once, deduplicates concurrent fetches and reports counts', async () => {
+  test('fetches links.csv once across all jars, partitions by type, and populates all with every row', async () => {
     let calls = 0;
     stubFetch(async () => {
       calls++;
       await new Promise((resolve) => setTimeout(resolve, 10));
-      return new Response(threeLinksCsv, { status: 200 });
+      return new Response(sharedCsv, { status: 200 });
     });
 
     const store = new JarStore();
-    const [first, second] = await Promise.all([
+    const [yt, art, all] = await Promise.all([
+      store.loadJar('youtube'),
       store.loadJar('articles'),
-      store.loadJar('articles'),
+      store.loadJar('all'),
     ]);
 
     expect(calls).toBe(1);
-    expect(first).toBe(second);
-    expect(first).toHaveLength(3);
-    expect(store.getCount('articles')).toBe(3);
-    expect(store.getCount('youtube')).toBe(0);
-    expect(store.getAllCounts()).toEqual({ articles: 3 });
-
-    await store.loadJar('articles');
-    expect(calls).toBe(1);
+    expect(yt).toHaveLength(3);
+    expect(art).toHaveLength(2);
+    expect(all).toHaveLength(6);
+    expect(store.getCount('recommendations')).toBe(1);
+    expect(store.getCount('others')).toBe(0);
+    expect(store.getAllCounts()).toEqual({
+      all: 6,
+      youtube: 3,
+      articles: 2,
+      recommendations: 1,
+      others: 0,
+    });
   });
 
-  test('preloadAll loads every jar concurrently and tolerates failures', async () => {
-    stubFetch((input) => {
-      if (String(input).includes('articles')) {
-        return new Response('missing', { status: 500, statusText: 'Server Error' });
-      }
-      return new Response('https://example.com/a\nhttps://example.com/b\n', { status: 200 });
-    });
+  test('preloadAll tolerates fetch failures gracefully', async () => {
+    stubFetch(() => new Response('missing', { status: 500, statusText: 'Server Error' }));
 
     const store = new JarStore();
     const counts = await store.preloadAll();
 
     expect(counts).toEqual({
-      youtube: 2,
+      youtube: 0,
       articles: 0,
-      all: 2,
-      recommendations: 2,
-      others: 2,
-    });
-    expect(store.getAllCounts()).toEqual({
-      youtube: 2,
-      all: 2,
-      recommendations: 2,
-      others: 2,
+      all: 0,
+      recommendations: 0,
+      others: 0,
     });
   });
 
-  test('draws each link once per shuffle bag, then refills without immediate repeats', async () => {
+  test('draws each link once per shuffle bag (and all jar draws across all types) without immediate repeats', async () => {
     let calls = 0;
     stubFetch(() => {
       calls++;
-      return new Response(threeLinksCsv, { status: 200 });
+      return new Response(sharedCsv, { status: 200 });
     });
 
     const store = new JarStore();
-    const draws: string[] = [];
+    const ytDraws: string[] = [];
     for (let i = 0; i < 9; i++) {
       const entry = await store.drawRandom('youtube');
       expect(entry).not.toBeNull();
-      draws.push(entry!.url);
+      expect(entry!.type).toBe('youtube');
+      ytDraws.push(entry!.url);
+    }
+
+    const allDraws: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const entry = await store.drawRandom('all');
+      expect(entry).not.toBeNull();
+      allDraws.push(entry!.url);
     }
 
     expect(calls).toBe(1);
-    expect(new Set(draws.slice(0, 3)).size).toBe(3);
-    expect(new Set(draws.slice(3, 6)).size).toBe(3);
-    expect(new Set(draws.slice(6, 9)).size).toBe(3);
-    expect(draws[3]).not.toBe(draws[2]);
-    expect(draws[6]).not.toBe(draws[5]);
+    expect(new Set(ytDraws.slice(0, 3)).size).toBe(3);
+    expect(new Set(ytDraws.slice(3, 6)).size).toBe(3);
+    expect(new Set(ytDraws.slice(6, 9)).size).toBe(3);
+    expect(ytDraws[3]).not.toBe(ytDraws[2]);
+    expect(ytDraws[6]).not.toBe(ytDraws[5]);
+    expect(new Set(allDraws).size).toBe(6);
   });
 
-  test('returns null for an empty jar', async () => {
-    stubFetch(() => new Response('# no links yet\n', { status: 200 }));
+  test('returns null for an empty category jar', async () => {
+    stubFetch(() => new Response(sharedCsv, { status: 200 }));
 
     const store = new JarStore();
-    expect(await store.drawRandom('recommendations')).toBeNull();
-    expect(store.getCount('recommendations')).toBe(0);
+    expect(await store.drawRandom('others')).toBeNull();
+    expect(store.getCount('others')).toBe(0);
+  });
+
+  test('computes relative fill ratios with all jar always fullest and category jars proportional to each other', () => {
+    const ratios = computeJarFillRatios({
+      all: 37,
+      articles: 20,
+      youtube: 10,
+      recommendations: 5,
+      others: 2,
+    });
+
+    expect(ratios.all).toBe(1);
+    expect(ratios.articles).toBeCloseTo(MAX_CATEGORY_FILL_RATIO, 5);
+    expect(ratios.youtube).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.5, 5);
+    expect(ratios.recommendations).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.25, 5);
+    expect(ratios.others).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.1, 5);
+
+    // Even if a single category holds 100% of links, `all` (1.0) remains visually fuller.
+    const singleCategory = computeJarFillRatios({
+      all: 12,
+      youtube: 12,
+      articles: 0,
+      recommendations: 0,
+      others: 0,
+    });
+    expect(singleCategory.all).toBe(1);
+    expect(singleCategory.youtube).toBeLessThan(singleCategory.all);
+    expect(singleCategory.articles).toBe(0);
+
+    // Completely empty dataset gives 0 across all jars.
+    expect(
+      computeJarFillRatios({ all: 0, youtube: 0, articles: 0, recommendations: 0, others: 0 }),
+    ).toEqual({
+      all: 0,
+      youtube: 0,
+      articles: 0,
+      recommendations: 0,
+      others: 0,
+    });
   });
 });

@@ -1,45 +1,45 @@
 #!/usr/bin/env bun
 /**
- * enrich-csv.ts — pre-fetch Open Graph metadata for the Jar of Links CSV files.
+ * enrich-csv.ts — pre-fetch Open Graph metadata for `public/data/links.csv`.
  *
  * Usage:
- *   bun run scripts/enrich-csv.ts                 # enrich every CSV in public/data and write it back
- *   bun run scripts/enrich-csv.ts --dry-run       # show what would change, write nothing
- *   bun run scripts/enrich-csv.ts --sync-all      # merge all category URLs into all.csv, then enrich
- *   bun run scripts/enrich-csv.ts --dry-run --sync-all
+ *   bun run scripts/enrich-csv.ts             # enrich links.csv in public/data and write it back
+ *   bun run scripts/enrich-csv.ts --dry-run   # show what would change, write nothing
  *
- * Input format (both shapes may be mixed in one file):
- *   url
- *   https://example.com/one,,,,                      <- bare URL, 5 empty columns
- *   url,title,description,image,site_name            <- header (optional)
- *   https://example.com/two,Title,"A description, with a comma",https://example.com/og.png,Example
+ * Input format (`url,type,title,description,image,site_name`):
+ *   url,type,title,description,image,site_name
+ *   https://example.com/one,articles,,,,
+ *   https://www.youtube.com/watch?v=f4s1h2YETNY,youtube,,,,
+ *   https://example.com/two,recommendations,Title,"A description, with a comma",https://example.com/og.png,Example
  *
- * Rows missing a title or an image are resolved at runtime:
+ * Rows missing a title or an image are resolved:
  *   - YouTube links use the oEmbed endpoint plus the deterministic i.ytimg.com thumbnail.
  *   - Everything else is fetched (5s timeout) and parsed for og:* / twitter:* / <title> /
  *     <meta name="description"> tags.
  *
- * Existing non-empty fields are never overwritten.
+ * Existing non-empty fields are never overwritten, and the `type` column is normalized
+ * into one of: `youtube`, `articles`, `recommendations`, `others`.
  * Set JAR_DATA_DIR to point the script at another directory (used by tests).
  */
 
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { normalizeLinkType, parseExplicitLinkType } from '../src/data/csvParser';
+import type { LinkType } from '../src/types';
 
 const DATA_DIR = process.env.JAR_DATA_DIR
   ? resolve(process.env.JAR_DATA_DIR)
   : resolve(import.meta.dir, '..', 'public', 'data');
 
-const CATEGORY_FILES = ['youtube.csv', 'articles.csv', 'recommendations.csv', 'others.csv'];
-const ALL_FILE = 'all.csv';
-const HEADER = ['url', 'title', 'description', 'image', 'site_name'] as const;
+const HEADER = ['url', 'type', 'title', 'description', 'image', 'site_name'] as const;
 const TIMEOUT_MS = 5000;
 const CONCURRENCY = 4;
 const USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-interface LinkRow {
+export interface LinkRow {
   url: string;
+  type: LinkType;
   title: string;
   description: string;
   image: string;
@@ -49,7 +49,7 @@ interface LinkRow {
 interface EnrichResult {
   row: LinkRow;
   /** Fields that were filled in, in the order they were discovered. */
-  filled: Array<{ field: keyof LinkRow; value: string }>;
+  filled: Array<{ field: Exclude<keyof LinkRow, 'type'>; value: string }>;
   source: 'oembed' | 'page' | 'thumbnail' | 'none';
   note?: string;
 }
@@ -123,18 +123,48 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((cells) => cells.some((cell) => cell.trim() !== ''));
 }
 
+function normalizeHeaderCell(cell: string): string {
+  return cell.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 function isHeaderRow(cells: string[]): boolean {
-  const first = (cells[0] ?? '').trim().toLowerCase();
-  return first === 'url' || first === 'link' || first === 'address';
+  const first = normalizeHeaderCell(cells[0] ?? '');
+  return first === 'url' || first === 'link' || first === 'address' || first === 'type';
 }
 
 function toRows(cells: string[][], file: string): LinkRow[] {
   const rows: LinkRow[] = [];
+  if (cells.length === 0) return rows;
 
-  for (const [index, record] of cells.entries()) {
-    if (isHeaderRow(record)) continue;
+  const hasHeader = isHeaderRow(cells[0]);
+  let colMap = { url: 0, type: 1, title: 2, description: 3, image: 4, site_name: 5 };
 
-    const url = (record[0] ?? '').trim();
+  if (hasHeader) {
+    colMap = { url: -1, type: -1, title: -1, description: -1, image: -1, site_name: -1 };
+    cells[0].forEach((raw, idx) => {
+      const key = normalizeHeaderCell(raw);
+      if (['url', 'link', 'href', 'address'].includes(key) && colMap.url === -1) colMap.url = idx;
+      else if (['type', 'category', 'jar', 'kind'].includes(key) && colMap.type === -1)
+        colMap.type = idx;
+      else if (['title', 'name', 'ogtitle'].includes(key) && colMap.title === -1)
+        colMap.title = idx;
+      else if (['description', 'desc', 'summary', 'ogdescription'].includes(key) && colMap.description === -1)
+        colMap.description = idx;
+      else if (['image', 'ogimage', 'thumbnail', 'thumb', 'img'].includes(key) && colMap.image === -1)
+        colMap.image = idx;
+      else if (['sitename', 'site', 'publisher', 'ogsitename'].includes(key) && colMap.site_name === -1)
+        colMap.site_name = idx;
+    });
+    if (colMap.url === -1) colMap.url = 0;
+  }
+
+  const startIndex = hasHeader ? 1 : 0;
+  for (let index = startIndex; index < cells.length; index += 1) {
+    const record = cells[index];
+    const firstTrimmed = (record[0] ?? '').trim();
+    if (firstTrimmed.startsWith('#')) continue;
+
+    const url = (record[colMap.url] ?? '').trim();
     if (!url) continue;
 
     if (!/^https?:\/\//i.test(url)) {
@@ -142,17 +172,34 @@ function toRows(cells: string[][], file: string): LinkRow[] {
       continue;
     }
 
-    if (record.length > 5) {
-      warn(`${file}: row ${index + 1} has ${record.length} columns, keeping the first 5`);
+    if (hasHeader) {
+      rows.push({
+        url,
+        type: normalizeLinkType(colMap.type >= 0 ? record[colMap.type] : undefined, url),
+        title: (colMap.title >= 0 ? (record[colMap.title] ?? '') : '').trim(),
+        description: (colMap.description >= 0 ? (record[colMap.description] ?? '') : '').trim(),
+        image: (colMap.image >= 0 ? (record[colMap.image] ?? '') : '').trim(),
+        site_name: (colMap.site_name >= 0 ? (record[colMap.site_name] ?? '') : '').trim(),
+      });
+    } else if (parseExplicitLinkType(record[1])) {
+      rows.push({
+        url,
+        type: normalizeLinkType(record[1], url),
+        title: (record[2] ?? '').trim(),
+        description: (record[3] ?? '').trim(),
+        image: (record[4] ?? '').trim(),
+        site_name: (record[5] ?? '').trim(),
+      });
+    } else {
+      rows.push({
+        url,
+        type: normalizeLinkType(undefined, url),
+        title: (record[1] ?? '').trim(),
+        description: (record[2] ?? '').trim(),
+        image: (record[3] ?? '').trim(),
+        site_name: (record[4] ?? '').trim(),
+      });
     }
-
-    rows.push({
-      url,
-      title: (record[1] ?? '').trim(),
-      description: (record[2] ?? '').trim(),
-      image: (record[3] ?? '').trim(),
-      site_name: (record[4] ?? '').trim(),
-    });
   }
 
   return rows;
@@ -169,7 +216,9 @@ export function serializeCsv(rows: LinkRow[]): string {
   const lines = [HEADER.join(',')];
   for (const row of rows) {
     lines.push(
-      [row.url, row.title, row.description, row.image, row.site_name].map(escapeField).join(','),
+      [row.url, row.type, row.title, row.description, row.image, row.site_name]
+        .map(escapeField)
+        .join(','),
     );
   }
   return `${lines.join('\n')}\n`;
@@ -189,10 +238,6 @@ function truncate(value: string, max: number): string {
 
 function glyph(symbol: string, fallback: string): string {
   return process.stdout.isTTY ? symbol : fallback;
-}
-
-function normalizeUrl(url: string): string {
-  return url.trim();
 }
 
 function hostnameOf(url: string): string {
@@ -353,7 +398,7 @@ function needsEnrichment(row: LinkRow): boolean {
 async function enrichRow(row: LinkRow): Promise<EnrichResult> {
   const next: LinkRow = { ...row };
   const filled: EnrichResult['filled'] = [];
-  const set = (field: keyof LinkRow, value: string | undefined) => {
+  const set = (field: Exclude<keyof LinkRow, 'type'>, value: string | undefined) => {
     if (!value || next[field]) return;
     next[field] = value;
     filled.push({ field, value });
@@ -445,7 +490,9 @@ async function mapLimit<T, R>(
 }
 
 async function enrichRows(rows: LinkRow[]): Promise<{ rows: LinkRow[]; results: EnrichResult[] }> {
-  const pending = rows.map((row, index) => ({ row, index })).filter((entry) => needsEnrichment(entry.row));
+  const pending = rows
+    .map((row, index) => ({ row, index }))
+    .filter((entry) => needsEnrichment(entry.row));
 
   const enriched = await mapLimit(pending, CONCURRENCY, async (entry) => ({
     index: entry.index,
@@ -464,37 +511,6 @@ async function enrichRows(rows: LinkRow[]): Promise<{ rows: LinkRow[]; results: 
 }
 
 /* ------------------------------------------------------------------ *
- * Sync
- * ------------------------------------------------------------------ */
-
-function mergeIntoAll(categories: LinkRow[], existing: LinkRow[]): { rows: LinkRow[]; added: number; kept: number } {
-  const existingByUrl = new Map(existing.map((row) => [normalizeUrl(row.url), row]));
-  const seen = new Set<string>();
-  const rows: LinkRow[] = [];
-  let added = 0;
-
-  for (const row of categories) {
-    const key = normalizeUrl(row.url);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const previous = existingByUrl.get(key);
-    if (!previous) added += 1;
-    rows.push(previous ?? row);
-  }
-
-  let kept = 0;
-  for (const row of existing) {
-    const key = normalizeUrl(row.url);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    rows.push(row);
-    kept += 1;
-  }
-
-  return { rows, added, kept };
-}
-
-/* ------------------------------------------------------------------ *
  * CLI
  * ------------------------------------------------------------------ */
 
@@ -502,12 +518,10 @@ function printUsage(): void {
   console.log(`Jar of Links — CSV enrichment
 
 Usage:
-  bun run scripts/enrich-csv.ts [--dry-run] [--sync-all]
+  bun run scripts/enrich-csv.ts [--dry-run]
 
 Options:
   --dry-run    Resolve metadata and print a report, but do not write any file.
-  --sync-all   Merge every unique URL from ${CATEGORY_FILES.join(', ')}
-               into ${ALL_FILE} (existing bonus links are preserved), then enrich.
   --help       Show this message.
 
 Environment:
@@ -540,7 +554,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const unknown = argv.filter((arg) => !['--dry-run', '--sync-all'].includes(arg));
+  const unknown = argv.filter((arg) => arg !== '--dry-run');
   if (unknown.length > 0) {
     console.error(`Unknown argument(s): ${unknown.join(' ')}`);
     printUsage();
@@ -549,7 +563,6 @@ async function main(): Promise<void> {
   }
 
   const dryRun = argv.includes('--dry-run');
-  const syncAll = argv.includes('--sync-all');
 
   console.log(`Jar of Links — CSV enrichment${dryRun ? ' (dry run)' : ''}`);
   console.log(`data: ${DATA_DIR}`);
@@ -561,34 +574,6 @@ async function main(): Promise<void> {
     return;
   }
 
-  const missing = CATEGORY_FILES.filter((file) => !available.includes(file));
-  if (missing.length > 0) {
-    warn(`missing category file(s): ${missing.join(', ')}`);
-  }
-
-  // Load everything first so --sync-all can reuse the parsed rows.
-  const data = new Map<string, LinkRow[]>();
-  for (const file of available) {
-    data.set(file, await readRows(file));
-  }
-
-  if (syncAll) {
-    const categories: LinkRow[] = [];
-    for (const file of CATEGORY_FILES) {
-      const rows = data.get(file);
-      if (rows) categories.push(...rows);
-    }
-
-    const existing = data.get(ALL_FILE) ?? [];
-    const { rows, added, kept } = mergeIntoAll(categories, existing);
-
-    console.log(
-      `\n${glyph('◆', '*')} sync ${ALL_FILE}: ${existing.length} → ${rows.length} rows (+${added} from categories, ${kept} bonus kept)`,
-    );
-
-    data.set(ALL_FILE, rows);
-  }
-
   let totalRows = 0;
   let totalEnriched = 0;
   let totalMissingTitle = 0;
@@ -597,8 +582,8 @@ async function main(): Promise<void> {
   let totalFilled = 0;
   let written = 0;
 
-  for (const file of [...data.keys()].sort()) {
-    const rows = data.get(file) ?? [];
+  for (const file of available) {
+    const rows = await readRows(file);
     const { rows: enrichedRows, results } = await enrichRows(rows);
 
     const changed = results.filter((result) => result.filled.length > 0);
@@ -624,18 +609,22 @@ async function main(): Promise<void> {
       if (lines.length === 0) {
         if (!result.row.title) {
           console.log(
-            `   ${glyph('·', '-')} ${truncate(result.row.url, 84)} — unresolved${result.note ? ` (${result.note})` : ''}`,
+            `   ${glyph('·', '-')} [${result.row.type}] ${truncate(result.row.url, 76)} — unresolved${result.note ? ` (${result.note})` : ''}`,
           );
         } else if (!result.row.image) {
           console.log(
-            `   ${glyph('·', '-')} ${truncate(result.row.url, 84)} — no og:image, procedural banner will be used`,
+            `   ${glyph('·', '-')} [${result.row.type}] ${truncate(result.row.url, 76)} — no og:image, procedural banner will be used`,
           );
         } else {
-          console.log(`   ${glyph('·', '-')} ${truncate(result.row.url, 84)} — already complete`);
+          console.log(
+            `   ${glyph('·', '-')} [${result.row.type}] ${truncate(result.row.url, 76)} — already complete`,
+          );
         }
         continue;
       }
-      console.log(`   ${glyph('✓', '+')} ${truncate(result.row.url, 84)} [${result.source}]`);
+      console.log(
+        `   ${glyph('✓', '+')} [${result.row.type}] ${truncate(result.row.url, 76)} [${result.source}]`,
+      );
       for (const line of lines) console.log(`       ${line}`);
     }
 
@@ -651,7 +640,7 @@ async function main(): Promise<void> {
   const writtenLabel = dryRun ? '0 (dry run)' : `${written} file(s)`;
 
   console.log(`\nSummary`);
-  console.log(`  files:         ${data.size}`);
+  console.log(`  files:         ${available.length}`);
   console.log(`  rows:          ${totalRows}`);
   console.log(`  filled:        ${totalEnriched} row(s), ${totalFilled} field(s)`);
   console.log(`  no image:      ${totalNoImage} row(s) -> procedural banner`);

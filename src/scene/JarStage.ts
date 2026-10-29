@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AnimationPhase, JarConfig, JarId, JarStageCallbacks } from '../types';
 import { JAR_CONFIGS } from '../config/jars';
+import { computeJarFillRatios } from '../data/jarStore';
 import {
   JarMesh,
   JAR_BODY_HEIGHT,
@@ -544,8 +545,20 @@ export class JarStage {
   }
 
   // ---------------------------------------------------------------------------
-  // Public animation controls
+  // Public animation & fill controls
   // ---------------------------------------------------------------------------
+
+  /**
+   * Update the visual card fullness of every jar based on current CSV item counts.
+   * `all` is always the fullest jar; category jars reflect their relative counts.
+   */
+  updateJarCounts(counts: Partial<Record<JarId, number>>): void {
+    const ratios = computeJarFillRatios(counts);
+    for (const runtime of this.jarList) {
+      const id = runtime.config.id;
+      runtime.mesh.setFillLevel(ratios[id], counts[id]);
+    }
+  }
 
   getPhase(): AnimationPhase {
     return this.phase;

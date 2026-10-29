@@ -1,12 +1,15 @@
 export type JarId = 'all' | 'youtube' | 'articles' | 'recommendations' | 'others';
 
+/** Concrete link category stored in the `type` column of `public/data/links.csv`. */
+export type LinkType = Exclude<JarId, 'all'>;
+
 export interface JarConfig {
   id: JarId;
   /** Display label shown on the jar's parchment pixel label and HUD */
   label: string;
   /** Short pixel-label text rendered directly onto the 3D jar texture */
   shortLabel: string;
-  /** Relative URL to the static CSV file inside public/data/ */
+  /** Relative URL to the shared static CSV file inside public/data/ */
   csvPath: string;
   /** Relative scale multiplier (center 'all' jar is > 1.0, others are 1.0) */
   scale: number;
@@ -24,6 +27,7 @@ export interface JarConfig {
 
 export interface LinkEntry {
   url: string;
+  type: LinkType;
   title?: string;
   description?: string;
   image?: string;
