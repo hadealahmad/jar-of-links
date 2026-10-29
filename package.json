@@ -1,0 +1,22 @@
+{
+  "name": "jar-of-links",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Retro pixel-art Three.js jar of links powered by static CSV files",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "test": "bun test",
+    "enrich": "bun run scripts/enrich-csv.ts"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.0"
+  }
+}
