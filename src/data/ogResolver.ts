@@ -193,7 +193,7 @@ export async function resolveLinkPreview(entry: LinkEntry, jarConfig: JarConfig)
     if (!title) {
       const oembed = await fetchYouTubeOEmbed(entry.url);
       if (oembed.title) title = oembed.title;
-      if (!description && oembed.author) description = `Video by ${oembed.author}`;
+      if (!description && oembed.author) description = `مقطع بواسطة ${oembed.author}`;
     }
   }
 
@@ -224,7 +224,7 @@ export async function resolveLinkPreview(entry: LinkEntry, jarConfig: JarConfig)
   }
 
   if (!description) {
-    description = `Click this unfolded note to open ${hostname} in a new tab.`;
+    description = `اضغط على هذه الورقة لفتح ${hostname} في تبويب جديد.`;
   }
 
   return {

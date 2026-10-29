@@ -2,11 +2,8 @@ import * as THREE from 'three';
 import type { JarConfig } from '../types';
 
 /* -------------------------------------------------------------------------
- * Built-in 5x7 bitmap pixel font.
- *
- * Every glyph is drawn with integer `fillRect` calls, so pixel typography on
- * jar labels and fallback OG banners stays razor-sharp. No webfont loading,
- * no canvas text anti-aliasing, no race conditions.
+ * Built-in 5x7 bitmap pixel font (for ASCII hostnames & symbols)
+ * + Hard-thresholded Handjet pixel renderer for connected Arabic typography!
  * ---------------------------------------------------------------------- */
 
 const GLYPH_WIDTH = 5;
@@ -70,10 +67,12 @@ export const PIXEL_FONT: Record<string, readonly string[]> = {
   '_': ['.....', '.....', '.....', '.....', '.....', '.....', '#####'],
   '+': ['.....', '..#..', '..#..', '#####', '..#..', '..#..', '.....'],
   '*': ['.....', '..#..', '.###.', '#####', '.###.', '#.#.#', '.....'],
-  '★': ['..#..', '.###.', '#####', '.###.', '.#.#.', '#.#.#', '.....'],
+  '\u2605': ['..#..', '.###.', '#####', '.###.', '.#.#.', '#.#.#', '.....'],
 };
 
 const FALLBACK_GLYPH = PIXEL_FONT['?'];
+const NON_ASCII_RE = /[^\x00-\x7f]/;
+const ARABIC_RE = /[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]/;
 
 export interface PixelTextOptions {
   /** Integer pixel scale (1 = 5x7 tiny, 2/3 = chunky). Clamped to >= 1. */
@@ -148,6 +147,88 @@ function fitPixelText(text: string, maxWidth: number, scale: number, letterSpaci
     trimmed = trimmed.slice(0, -1);
   }
   return trimmed.length > 0 ? `${trimmed.trimEnd()}${ellipsis}` : ellipsis;
+}
+
+interface CrispFontOptions {
+  maxWidth: number;
+  fontSize: number;
+  minFontSize?: number;
+  fontWeight?: number;
+  color: string;
+  highlightColor?: string;
+  highlightOffset?: number;
+  alphaThreshold?: number;
+}
+
+/**
+ * Renders connected Arabic (or Unicode) strings using the Google Font `Handjet`
+ * onto an offscreen canvas and quantizes alpha into hard 1x1 integer pixels so
+ * there is zero blurry anti-aliasing on low-res pixel textures.
+ */
+function drawCrispFontText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  centerX: number,
+  centerY: number,
+  options: CrispFontOptions,
+): void {
+  const clean = text.trim();
+  if (!clean) return;
+
+  const targetWidth = ctx.canvas.width;
+  const targetHeight = ctx.canvas.height;
+  const { canvas: scratch, ctx: scratchCtx } = createCanvas(targetWidth, targetHeight);
+
+  const weight = options.fontWeight ?? 700;
+  const minSize = options.minFontSize ?? 10;
+  const isArabic = ARABIC_RE.test(clean);
+
+  scratchCtx.direction = isArabic ? 'rtl' : 'ltr';
+  scratchCtx.textAlign = 'center';
+  scratchCtx.textBaseline = 'middle';
+
+  let size = options.fontSize;
+  let display = clean;
+
+  while (size > minSize) {
+    scratchCtx.font = `${weight} ${size}px "Handjet", Tahoma, sans-serif`;
+    if (scratchCtx.measureText(display).width <= options.maxWidth) break;
+    size -= 1;
+  }
+
+  scratchCtx.font = `${weight} ${size}px "Handjet", Tahoma, sans-serif`;
+  if (scratchCtx.measureText(display).width > options.maxWidth) {
+    let shortened = display;
+    while (shortened.length > 1 && scratchCtx.measureText(`${shortened}…`).width > options.maxWidth) {
+      shortened = shortened.slice(0, -1);
+    }
+    display = `${shortened.trimEnd()}…`;
+  }
+
+  scratchCtx.clearRect(0, 0, targetWidth, targetHeight);
+  scratchCtx.fillStyle = '#ffffff';
+  scratchCtx.fillText(display, Math.round(centerX), Math.round(centerY));
+
+  const data = scratchCtx.getImageData(0, 0, targetWidth, targetHeight).data;
+  const threshold = options.alphaThreshold ?? 112;
+
+  const stampMask = (fill: string, ox: number, oy: number): void => {
+    ctx.fillStyle = fill;
+    for (let y = 0; y < targetHeight; y++) {
+      const rowOffset = y * targetWidth * 4;
+      for (let x = 0; x < targetWidth; x++) {
+        if (data[rowOffset + x * 4 + 3] >= threshold) {
+          ctx.fillRect(x + ox, y + oy, 1, 1);
+        }
+      }
+    }
+  };
+
+  if (options.highlightColor) {
+    const off = Math.max(1, Math.floor(options.highlightOffset ?? 1));
+    stampMask(options.highlightColor, off, off);
+  }
+  stampMask(options.color, 0, 0);
 }
 
 /* -------------------------------------------------------------------------
@@ -251,14 +332,13 @@ function createTexture(canvas: HTMLCanvasElement, repeat = false): THREE.CanvasT
 }
 
 /* -------------------------------------------------------------------------
- * Jar parchment label.
+ * Jar parchment label (supports Handjet Arabic pixel text + live font upgrade).
  * ---------------------------------------------------------------------- */
 
 const LABEL_WIDTH = 128;
 const LABEL_HEIGHT = 64;
 
-export function createJarLabelTexture(config: JarConfig): THREE.CanvasTexture {
-  const { canvas, ctx } = createCanvas(LABEL_WIDTH, LABEL_HEIGHT);
+function paintJarLabelCanvas(ctx: CanvasRenderingContext2D, config: JarConfig): void {
   const rng = createRng(`jar-label:${config.id}:${config.shortLabel}`);
   const accent = normalizeHex(config.accentColor);
 
@@ -328,24 +408,59 @@ export function createJarLabelTexture(config: JarConfig): THREE.CanvasTexture {
     ctx.fillRect(LABEL_WIDTH / 2 + offset, LABEL_HEIGHT - 6, 1, 1);
   }
 
-  // Crisp auto-scaled bitmap label text.
-  const text = (config.shortLabel || config.label || '').trim().toUpperCase();
-  const available = LABEL_WIDTH - frame * 2 - 10;
-  let scale = 3;
-  if (measurePixelText(text, scale) > available) scale = 2;
-  if (measurePixelText(text, scale) > available) scale = 1;
+  const rawLabel = (config.shortLabel || config.label || '').trim();
+  const available = LABEL_WIDTH - frame * 2 - 12;
 
-  const textHeight = GLYPH_HEIGHT * scale;
-  const textTop = Math.round((LABEL_HEIGHT - textHeight) / 2) - (scale === 3 ? 1 : 0);
-  drawPixelText(ctx, text, LABEL_WIDTH / 2, textTop, {
-    scale,
-    align: 'center',
-    color: '#231712',
-    highlightColor: '#fff8eb',
-    highlightOffset: 1,
-  });
+  if (NON_ASCII_RE.test(rawLabel)) {
+    drawCrispFontText(ctx, rawLabel, LABEL_WIDTH / 2, LABEL_HEIGHT / 2 + 1, {
+      maxWidth: available,
+      fontSize: config.id === 'all' ? 31 : 27,
+      minFontSize: 16,
+      fontWeight: 800,
+      color: '#231712',
+      highlightColor: '#fff8eb',
+      highlightOffset: 1,
+      alphaThreshold: 110,
+    });
+  } else {
+    const text = rawLabel.toUpperCase();
+    let scale = 3;
+    if (measurePixelText(text, scale) > available) scale = 2;
+    if (measurePixelText(text, scale) > available) scale = 1;
 
-  return createTexture(canvas);
+    const textHeight = GLYPH_HEIGHT * scale;
+    const textTop = Math.round((LABEL_HEIGHT - textHeight) / 2) - (scale === 3 ? 1 : 0);
+    drawPixelText(ctx, text, LABEL_WIDTH / 2, textTop, {
+      scale,
+      align: 'center',
+      color: '#231712',
+      highlightColor: '#fff8eb',
+      highlightOffset: 1,
+    });
+  }
+}
+
+export function createJarLabelTexture(config: JarConfig): THREE.CanvasTexture {
+  const { canvas, ctx } = createCanvas(LABEL_WIDTH, LABEL_HEIGHT);
+  paintJarLabelCanvas(ctx, config);
+  const texture = createTexture(canvas);
+
+  // Re-paint the 3D jar label automatically once the Google Font `Handjet` finishes loading.
+  if (typeof document !== 'undefined' && document.fonts) {
+    const repaint = (): void => {
+      paintJarLabelCanvas(ctx, config);
+      texture.needsUpdate = true;
+    };
+    void document.fonts
+      .load('800 28px "Handjet"', config.shortLabel || config.label)
+      .then(repaint)
+      .catch(() => {
+        /* Keep initial pixelated fallback rendering if offline. */
+      });
+    void document.fonts.ready.then(repaint).catch(() => {});
+  }
+
+  return texture;
 }
 
 /* -------------------------------------------------------------------------
@@ -717,52 +832,69 @@ export function generateFallbackOgDataUrl(title: string, hostname: string, accen
   drawSparkle(ctx, 96, 21, accentBright);
 
   // Uppercase hostname.
-  const hostText = fitPixelText(
-    (hostname || 'jar.hadealahmad.com').toUpperCase(),
-    width - 20,
-    1,
-    1,
-  );
-  drawPixelText(ctx, hostText, width / 2, 32, {
-    scale: 1,
-    align: 'center',
-    color: '#fff8eb',
-    highlightColor: '#0b0714',
-    highlightOffset: 1,
-  });
+  const rawHost = (hostname || 'jar.hadealahmad.com').trim();
+  if (NON_ASCII_RE.test(rawHost)) {
+    drawCrispFontText(ctx, rawHost, width / 2, 35, {
+      maxWidth: width - 20,
+      fontSize: 13,
+      minFontSize: 10,
+      color: '#fff8eb',
+      highlightColor: '#0b0714',
+      highlightOffset: 1,
+    });
+  } else {
+    const hostText = fitPixelText(rawHost.toUpperCase(), width - 20, 1, 1);
+    drawPixelText(ctx, hostText, width / 2, 32, {
+      scale: 1,
+      align: 'center',
+      color: '#fff8eb',
+      highlightColor: '#0b0714',
+      highlightOffset: 1,
+    });
+  }
 
-  // Truncated title line.
-  const titleText = fitPixelText(
-    (title || 'A tiny treasure from the jar').toUpperCase(),
-    width - 18,
-    1,
-    1,
-  );
-  drawPixelText(ctx, titleText, width / 2, 44, {
-    scale: 1,
-    align: 'center',
-    color: '#d8cfae',
-    highlightColor: '#0b0714',
-    highlightOffset: 1,
-  });
+  // Truncated title line (supports both Arabic and English titles).
+  const rawTitle = (title || 'كنز صغير من المرطبان').trim();
+  if (NON_ASCII_RE.test(rawTitle)) {
+    drawCrispFontText(ctx, rawTitle, width / 2, 46, {
+      maxWidth: width - 18,
+      fontSize: 13,
+      minFontSize: 10,
+      color: '#d8cfae',
+      highlightColor: '#0b0714',
+      highlightOffset: 1,
+    });
+  } else {
+    const titleText = fitPixelText(rawTitle.toUpperCase(), width - 18, 1, 1);
+    drawPixelText(ctx, titleText, width / 2, 44, {
+      scale: 1,
+      align: 'center',
+      color: '#d8cfae',
+      highlightColor: '#0b0714',
+      highlightOffset: 1,
+    });
+  }
 
   // Star divider.
   ctx.fillStyle = mixHex(accent, '#110c18', 0.35);
   ctx.fillRect(width / 2 - 30, 54, 22, 1);
   ctx.fillRect(width / 2 + 8, 54, 22, 1);
-  drawPixelText(ctx, '★', width / 2, 51, {
+  drawPixelText(ctx, '\u2605', width / 2, 51, {
     color: accentBright,
     highlightColor: '#0b0714',
     highlightOffset: 1,
     align: 'center',
   });
 
-  // Footer brand stamp on the grid.
-  drawPixelText(ctx, '★ JAR OF LINKS ★', width / 2, 67, {
+  // Arabic footer brand stamp on the grid.
+  drawCrispFontText(ctx, 'مرطبان الروابط', width / 2, 71, {
+    maxWidth: width - 24,
+    fontSize: 14,
+    minFontSize: 11,
+    fontWeight: 700,
     color: mixHex(accent, '#fff8eb', 0.25),
     highlightColor: '#0b0714',
     highlightOffset: 1,
-    align: 'center',
   });
 
   // Upscale 2x with hard pixels (160x90 -> 320x180).

@@ -7,9 +7,8 @@ const DATA_IMAGE = /^data:image\//i;
 const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
 const DEFAULT_ACCENT = '#f59e0b';
-const DEFAULT_HOVER_TEXT = 'PICK A JAR TO UNFOLD A RANDOM NOTE';
-const FALLBACK_TITLE = 'Untitled link';
-const FALLBACK_DESCRIPTION = 'No summary available yet — open the note to see what is hiding inside.';
+const FALLBACK_TITLE = 'رابط بدون عنوان';
+const FALLBACK_DESCRIPTION = 'لا يوجد وصف متاح حالياً — افتح الورقة لاستكشاف الرابط.';
 
 let hudInstanceCount = 0;
 
@@ -75,16 +74,6 @@ export class HudOverlay {
   private readonly instanceId: number;
 
   private readonly root: HTMLDivElement;
-  private readonly soundBtn: HTMLButtonElement;
-
-  private readonly hoverLine: HTMLParagraphElement;
-  private readonly hoverDot: HTMLSpanElement;
-  private readonly hoverText: HTMLSpanElement;
-
-  private readonly pillsRoot: HTMLDivElement;
-  private readonly pills = new Map<JarId, HTMLButtonElement>();
-  private readonly pillCounts = new Map<JarId, HTMLSpanElement>();
-  private readonly counts: Partial<Record<JarId, number>> = {};
 
   private readonly cardLayer: HTMLDivElement;
   private readonly paperCard: HTMLDivElement;
@@ -124,40 +113,7 @@ export class HudOverlay {
     /* ---------------------------------------------------------------- root */
     this.root = el('div', 'hud');
     this.root.dataset.hud = 'root';
-
-    /* ------------------------------------------------------------ top bar */
-    const topBar = el('header', 'hud-top');
-    const brand = el('div', 'hud-brand');
-    const title = el('h1', 'hud-title', 'JAR OF LINKS');
-    const subtitle = el('p', 'hud-subtitle', 'CLICK A JAR TO UNFOLD A RANDOM LINK');
-    brand.append(title, subtitle);
-
-    this.soundBtn = el('button', 'pixel-btn hud-sound');
-    this.soundBtn.type = 'button';
-    this.soundBtn.addEventListener('click', () => {
-      this.applyMuted(this.callbacks.onToggleMute());
-    });
-    topBar.append(brand, this.soundBtn);
-
-    /* ---------------------------------------------------------- hover line */
-    this.hoverLine = el('p', 'hud-hover');
-    this.hoverLine.setAttribute('aria-live', 'polite');
-    this.hoverLine.setAttribute('aria-atomic', 'true');
-    this.hoverDot = el('span', 'hud-hover__dot');
-    this.hoverDot.setAttribute('aria-hidden', 'true');
-    this.hoverText = el('span', 'hud-hover__text', DEFAULT_HOVER_TEXT);
-    this.hoverLine.append(this.hoverDot, this.hoverText);
-
-    /* --------------------------------------------------------------- pills */
-    this.pillsRoot = el('div', 'hud-pills');
-    this.pillsRoot.setAttribute('role', 'group');
-    this.pillsRoot.setAttribute('aria-label', 'Jar shortcuts');
-    for (const config of JAR_CONFIGS) {
-      this.pillsRoot.append(this.createPill(config));
-    }
-
-    const dock = el('div', 'hud-dock');
-    dock.append(this.hoverLine, this.pillsRoot);
+    this.root.dir = 'rtl';
 
     /* ---------------------------------------------------------------- card */
     const titleId = `paper-card-title-${this.instanceId}`;
@@ -177,12 +133,12 @@ export class HudOverlay {
     this.paperCard.setAttribute('aria-describedby', descId);
 
     const head = el('div', 'paper-head');
-    this.stampEl = el('span', 'paper-stamp', 'LINK');
+    this.stampEl = el('span', 'paper-stamp', 'رابط');
     this.stampEl.setAttribute('aria-hidden', 'true');
 
-    this.closeXBtn = el('button', 'paper-close', '✕');
+    this.closeXBtn = el('button', 'paper-close', '\u2715');
     this.closeXBtn.type = 'button';
-    this.closeXBtn.setAttribute('aria-label', 'Close link card');
+    this.closeXBtn.setAttribute('aria-label', 'إغلاق البطاقة');
     this.closeXBtn.addEventListener('click', () => this.requestClose());
     head.append(this.stampEl, this.closeXBtn);
 
@@ -196,7 +152,7 @@ export class HudOverlay {
 
     this.ogLoading = el('div', 'paper-og-loading');
     this.ogLoading.setAttribute('aria-hidden', 'true');
-    this.loaderLabel = el('span', 'paper-og-loading__label', 'UNFOLDING...');
+    this.loaderLabel = el('span', 'paper-og-loading__label', 'جارٍ فتح الورقة...');
     this.ogLoading.append(this.loaderLabel);
 
     this.ogImg = el('img', 'paper-og-img');
@@ -206,7 +162,7 @@ export class HudOverlay {
     this.ogImg.referrerPolicy = 'no-referrer';
     this.ogImg.hidden = true;
 
-    const openBadge = el('span', 'paper-open-badge', 'OPEN LINK ↗');
+    const openBadge = el('span', 'paper-open-badge', 'افتح الرابط \u2196');
     openBadge.setAttribute('aria-hidden', 'true');
 
     ogFrame.append(this.ogLoading, this.ogImg, openBadge);
@@ -228,16 +184,16 @@ export class HudOverlay {
     this.descEl = el('p', 'paper-desc', '');
     this.descEl.id = descId;
 
-    const hint = el('p', 'paper-hint', 'CLICK CARD TO OPEN IN NEW TAB ↗');
+    const hint = el('p', 'paper-hint', 'اضغط على البطاقة لفتح الرابط في تبويب جديد \u2196');
 
     this.linkEl.append(ogFrame, meta, this.titleEl, this.descEl, hint);
 
     const actions = el('div', 'paper-actions');
-    this.drawBtn = el('button', 'pixel-btn paper-btn paper-btn--draw', '↻ DRAW ANOTHER');
+    this.drawBtn = el('button', 'pixel-btn paper-btn paper-btn--draw', '\u21bb اسحب ورقة أخرى');
     this.drawBtn.type = 'button';
     this.drawBtn.addEventListener('click', () => this.callbacks.onDrawAnother());
 
-    const putBackBtn = el('button', 'pixel-btn paper-btn paper-btn--back', '✕ PUT BACK');
+    const putBackBtn = el('button', 'pixel-btn paper-btn paper-btn--back', '\u2715 أعدها للمرطبان');
     putBackBtn.type = 'button';
     putBackBtn.addEventListener('click', () => this.requestClose());
 
@@ -256,7 +212,7 @@ export class HudOverlay {
     const scanlines = el('div', 'hud-scanlines');
     scanlines.setAttribute('aria-hidden', 'true');
 
-    this.root.append(topBar, dock, this.cardLayer, this.toastEl, scanlines);
+    this.root.append(this.cardLayer, this.toastEl, scanlines);
     container.replaceChildren(this.root);
 
     this.ogImg.addEventListener('load', () => this.handleOgImageLoad());
@@ -267,8 +223,6 @@ export class HudOverlay {
     });
 
     this.setMutedState(initialMuted);
-    this.updateJarCounts({});
-    this.setHoveredJar(null);
 
     window.addEventListener('keydown', this.handleKeyDown);
   }
@@ -277,36 +231,17 @@ export class HudOverlay {
   /* Public API                                                             */
   /* ====================================================================== */
 
-  public setHoveredJar(jarConfig: JarConfig | null): void {
-    if (!jarConfig) {
-      this.hoverText.textContent = DEFAULT_HOVER_TEXT;
-      this.hoverDot.style.backgroundColor = '';
-      this.hoverLine.classList.remove('is-active');
-      return;
-    }
-
-    this.hoverText.textContent = `${jarConfig.label} — ${jarConfig.subtitle}`;
-    this.hoverDot.style.backgroundColor = safeAccent(jarConfig.accentColor);
-    this.hoverLine.classList.add('is-active');
+  public setHoveredJar(_jarConfig: JarConfig | null): void {
+    /* Top and bottom HUD bars are intentionally removed for a clean 3D stage. */
   }
 
-  public updateJarCounts(counts: Partial<Record<JarId, number>>): void {
-    for (const key of Object.keys(counts)) {
-      if (!isJarId(key)) continue;
-      const raw = counts[key];
-      if (typeof raw !== 'number' || !Number.isFinite(raw)) continue;
-      this.counts[key] = Math.max(0, Math.floor(raw));
-    }
-    this.renderJarCounts();
+  public updateJarCounts(_counts: Partial<Record<JarId, number>>): void {
+    /* Bottom jar shortcut bar removed; counts remain managed in JarStore. */
   }
 
   public setInteractionLocked(locked: boolean): void {
     this.interactionLocked = locked;
     this.root.classList.toggle('is-locked', locked);
-    for (const pill of this.pills.values()) {
-      pill.disabled = locked;
-      pill.setAttribute('aria-disabled', String(locked));
-    }
   }
 
   public showCardLoading(jarConfig: JarConfig): void {
@@ -316,25 +251,25 @@ export class HudOverlay {
     this.paperCard.classList.add('is-loading');
     this.setCardAccent(safeAccent(jarConfig.accentColor));
 
-    this.stampEl.textContent = (jarConfig.shortLabel || jarConfig.label).toUpperCase();
+    this.stampEl.textContent = jarConfig.shortLabel || jarConfig.label;
 
     this.linkEl.removeAttribute('href');
     this.linkEl.setAttribute('aria-busy', 'true');
-    this.linkEl.setAttribute('aria-label', `${jarConfig.label} note is unfolding`);
+    this.linkEl.setAttribute('aria-label', `جارٍ فتح ورقة من مرطبان ${jarConfig.label}`);
 
     this.ogImg.hidden = true;
     this.ogImg.classList.remove('is-loaded', 'is-fallback');
     this.ogImg.removeAttribute('src');
     this.ogLoading.hidden = false;
     this.ogLoading.classList.remove('is-error');
-    this.loaderLabel.textContent = 'UNFOLDING...';
+    this.loaderLabel.textContent = 'جارٍ فتح الورقة...';
 
     this.faviconEl.hidden = true;
     this.faviconEl.removeAttribute('src');
-    this.siteEl.textContent = jarConfig.label.toUpperCase();
-    this.hostEl.textContent = '···';
-    this.titleEl.textContent = 'UNFOLDING NOTE...';
-    this.descEl.textContent = `Pulling a random note out of the ${jarConfig.label} jar...`;
+    this.siteEl.textContent = jarConfig.label;
+    this.hostEl.textContent = '\u00b7\u00b7\u00b7';
+    this.titleEl.textContent = 'جارٍ فتح القصاصة...';
+    this.descEl.textContent = `يتم سحب ورقة عشوائية من مرطبان ${jarConfig.label}...`;
 
     this.drawBtn.disabled = true;
     this.fallbackImageUrl = '';
@@ -351,15 +286,15 @@ export class HudOverlay {
     const accent = safeAccent(preview.accentColor, safeAccent(config?.accentColor));
     this.setCardAccent(accent);
 
-    const jarLabel = (preview.jarLabel || config?.label || 'LINK').trim();
-    this.stampEl.textContent = jarLabel.toUpperCase();
+    const jarLabel = (preview.jarLabel || config?.label || 'رابط').trim();
+    this.stampEl.textContent = jarLabel;
 
     const hostname = (preview.hostname || '').trim();
     const title = (preview.title || '').trim() || hostname || FALLBACK_TITLE;
     const description = (preview.description || '').trim() || FALLBACK_DESCRIPTION;
 
-    this.siteEl.textContent = (preview.siteName || '').trim() || hostname || 'LINK';
-    this.hostEl.textContent = hostname ? `· ${hostname}` : '';
+    this.siteEl.textContent = (preview.siteName || '').trim() || hostname || 'رابط';
+    this.hostEl.textContent = hostname ? `\u00b7 ${hostname}` : '';
     this.titleEl.textContent = title;
     this.descEl.textContent = description;
 
@@ -369,13 +304,13 @@ export class HudOverlay {
       this.linkEl.setAttribute('aria-busy', 'false');
       this.linkEl.setAttribute(
         'aria-label',
-        `${title} — opens ${hostname || 'the link'} in a new tab`,
+        `${title} — يفتح ${hostname || 'الرابط'} في تبويب جديد`,
       );
     } else {
       this.linkEl.removeAttribute('href');
       this.linkEl.setAttribute('aria-busy', 'false');
-      this.linkEl.setAttribute('aria-label', `${title} — link unavailable`);
-      this.showToast('THIS LINK COULD NOT BE OPENED');
+      this.linkEl.setAttribute('aria-label', `${title} — الرابط غير متاح`);
+      this.showToast('تعذّر فتح هذا الرابط');
     }
 
     /* Favicon: hide gracefully if it 404s or is not an allowed source. */
@@ -427,13 +362,6 @@ export class HudOverlay {
 
   public setMutedState(muted: boolean): void {
     this.muted = Boolean(muted);
-    this.soundBtn.textContent = this.muted ? 'SFX: OFF' : 'SFX: ON';
-    this.soundBtn.setAttribute('aria-pressed', String(!this.muted));
-    this.soundBtn.setAttribute(
-      'aria-label',
-      this.muted ? 'Sound effects off. Turn sound on' : 'Sound effects on. Turn sound off',
-    );
-    this.soundBtn.classList.toggle('is-muted', this.muted);
     this.root.dataset.muted = this.muted ? 'true' : 'false';
   }
 
@@ -456,7 +384,7 @@ export class HudOverlay {
       this.toastTimer = null;
       this.toastEl.classList.remove('is-visible');
       this.toastEl.hidden = true;
-    }, 2600);
+    }, 2400);
   }
 
   public dispose(): void {
@@ -472,47 +400,7 @@ export class HudOverlay {
     }
 
     this.restoreFocus();
-    this.pills.clear();
-    this.pillCounts.clear();
     this.root.remove();
-  }
-
-  /* ====================================================================== */
-  /* DOM builders                                                           */
-  /* ====================================================================== */
-
-  private createPill(config: JarConfig): HTMLButtonElement {
-    const pill = el('button', 'jar-pill');
-    pill.type = 'button';
-    pill.dataset.jarId = config.id;
-    pill.setAttribute('aria-keyshortcuts', config.hotkey);
-    pill.style.setProperty('--pill-accent', safeAccent(config.accentColor));
-
-    const dot = el('span', 'jar-pill__dot');
-    dot.setAttribute('aria-hidden', 'true');
-
-    const label = el(
-      'span',
-      'jar-pill__label',
-      config.id === 'all' ? `★ ${config.shortLabel}` : config.shortLabel,
-    );
-    const count = el('span', 'jar-pill__count', '(··)');
-    count.setAttribute('aria-hidden', 'true');
-
-    pill.append(dot, label, count);
-
-    pill.addEventListener('click', () => {
-      if (this.interactionLocked) return;
-      this.callbacks.onSelectJar(config.id);
-    });
-    pill.addEventListener('pointerenter', () => this.setHoveredJar(config));
-    pill.addEventListener('pointerleave', () => this.setHoveredJar(null));
-    pill.addEventListener('focus', () => this.setHoveredJar(config));
-    pill.addEventListener('blur', () => this.setHoveredJar(null));
-
-    this.pills.set(config.id, pill);
-    this.pillCounts.set(config.id, count);
-    return pill;
   }
 
   /* ====================================================================== */
@@ -562,7 +450,7 @@ export class HudOverlay {
 
     this.ogLoading.hidden = false;
     this.ogLoading.classList.remove('is-error');
-    this.loaderLabel.textContent = 'UNFOLDING...';
+    this.loaderLabel.textContent = 'جارٍ فتح الورقة...';
 
     this.faviconEl.hidden = true;
     this.faviconEl.removeAttribute('src');
@@ -571,7 +459,7 @@ export class HudOverlay {
     this.hostEl.textContent = '';
     this.titleEl.textContent = '';
     this.descEl.textContent = '';
-    this.stampEl.textContent = 'LINK';
+    this.stampEl.textContent = 'رابط';
 
     this.drawBtn.disabled = true;
     this.paperCard.classList.remove('is-loading');
@@ -590,7 +478,7 @@ export class HudOverlay {
     this.ogImg.classList.toggle('is-fallback', fallback);
     this.ogLoading.hidden = false;
     this.ogLoading.classList.remove('is-error');
-    this.loaderLabel.textContent = 'UNFOLDING...';
+    this.loaderLabel.textContent = 'جارٍ فتح الورقة...';
 
     if (this.ogImg.getAttribute('src') === url) {
       if (this.ogImg.complete && this.ogImg.naturalWidth > 0) this.handleOgImageLoad();
@@ -619,7 +507,7 @@ export class HudOverlay {
     this.ogImg.hidden = true;
     this.ogLoading.hidden = false;
     this.ogLoading.classList.add('is-error');
-    this.loaderLabel.textContent = 'NO PREVIEW IMAGE';
+    this.loaderLabel.textContent = 'لا توجد صورة معاينة';
   }
 
   /**
@@ -641,30 +529,6 @@ export class HudOverlay {
   }
 
   /* ====================================================================== */
-  /* Hover / counts                                                         */
-  /* ====================================================================== */
-
-  private renderJarCounts(): void {
-    for (const config of JAR_CONFIGS) {
-      const count = this.counts[config.id];
-      const countEl = this.pillCounts.get(config.id);
-      if (countEl) {
-        countEl.textContent = typeof count === 'number' ? `(${count})` : '(··)';
-      }
-
-      const pill = this.pills.get(config.id);
-      if (pill) {
-        pill.setAttribute(
-          'aria-label',
-          typeof count === 'number'
-            ? `${config.label} jar, ${count} links, shortcut ${config.hotkey}`
-            : `${config.label} jar, shortcut ${config.hotkey}`,
-        );
-      }
-    }
-  }
-
-  /* ====================================================================== */
   /* Keyboard + focus                                                       */
   /* ====================================================================== */
 
@@ -682,7 +546,9 @@ export class HudOverlay {
 
     if (event.key === 'm' || event.key === 'M') {
       event.preventDefault();
-      this.applyMuted(this.callbacks.onToggleMute());
+      const nextMuted = Boolean(this.callbacks.onToggleMute());
+      this.setMutedState(nextMuted);
+      this.showToast(nextMuted ? 'الصوت: مكتوم' : 'الصوت: مفعّل');
       return;
     }
 
@@ -699,10 +565,6 @@ export class HudOverlay {
     event.preventDefault();
     this.callbacks.onSelectJar(jar.id);
   };
-
-  private applyMuted(muted: boolean): void {
-    this.setMutedState(Boolean(muted));
-  }
 
   private trapFocus(event: KeyboardEvent): void {
     const focusables = this.focusablesInCard();

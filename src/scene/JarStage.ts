@@ -92,13 +92,14 @@ interface JarRuntime {
   shadowMaterial: THREE.MeshBasicMaterial;
 }
 
+/** RTL right-to-left shelf layout: يوتيوب (+5), مقالات (+2.55), الكل (0), توصيات (-2.55), أخرى (-5) */
 function createDesktopLayout(): StageLayout {
   const slots: Record<JarId, JarSlot> = {
-    youtube: { x: -5.0, y: -0.75, z: 0 },
-    articles: { x: -2.55, y: -0.75, z: 0 },
+    youtube: { x: 5.0, y: -0.75, z: 0 },
+    articles: { x: 2.55, y: -0.75, z: 0 },
     all: { x: 0, y: -0.75, z: 0.25 },
-    recommendations: { x: 2.55, y: -0.75, z: 0 },
-    others: { x: 5.0, y: -0.75, z: 0 },
+    recommendations: { x: -2.55, y: -0.75, z: 0 },
+    others: { x: -5.0, y: -0.75, z: 0 },
   };
 
   const top = -0.75 + JAR_BODY_HEIGHT * 1.38;
@@ -121,11 +122,11 @@ function createDesktopLayout(): StageLayout {
 
 function createMobileLayout(): StageLayout {
   const slots: Record<JarId, JarSlot> = {
-    youtube: { x: -1.65, y: 2.45, z: 0 },
-    articles: { x: 1.65, y: 2.45, z: 0 },
+    youtube: { x: 1.65, y: 2.45, z: 0 },
+    articles: { x: -1.65, y: 2.45, z: 0 },
     all: { x: 0, y: -0.35, z: 0.2 },
-    recommendations: { x: -1.65, y: -2.95, z: 0 },
-    others: { x: 1.65, y: -2.95, z: 0 },
+    recommendations: { x: 1.65, y: -2.95, z: 0 },
+    others: { x: -1.65, y: -2.95, z: 0 },
   };
 
   const top = 2.45 + JAR_BODY_HEIGHT;
@@ -386,13 +387,13 @@ export class JarStage {
     const hFov = 2 * Math.atan(vTan * aspect);
     const hTan = Math.tan(hFov / 2);
 
-    const marginY = Math.max(0.55, layout.height * 0.09);
-    const marginX = Math.max(layout.mode === 'desktop' ? 0.55 : 0.18, layout.width * 0.03);
+    const marginY = Math.max(0.45, layout.height * 0.065);
+    const marginX = Math.max(layout.mode === 'desktop' ? 0.5 : 0.16, layout.width * 0.025);
 
     const halfHeight = layout.height / 2 + marginY;
     const halfWidth = layout.width / 2 + marginX;
 
-    let distance = Math.max(halfHeight / vTan, halfWidth / hTan) + 0.8;
+    let distance = Math.max(halfHeight / vTan, halfWidth / hTan) + 0.7;
 
     // Guarantee the extracted + unfolded hero note also fits on screen,
     // even on short/ultrawide viewports where the shelf framing is close.

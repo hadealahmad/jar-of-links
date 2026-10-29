@@ -46,7 +46,6 @@ function bootstrap(): void {
     state.promise = (async (): Promise<ResolvedLinkPreview | null> => {
       try {
         const entry = await jarStore.drawRandom(jarId);
-        // Update badge count in case this jar was loaded lazily on first click
         hud.updateJarCounts(jarStore.getAllCounts());
         if (!entry) return null;
         return await resolveLinkPreview(entry, jarConfig);
@@ -125,7 +124,7 @@ function bootstrap(): void {
 
       if (currentDraw.settled) {
         if (!currentDraw.result) {
-          hud.showToast(`No links found in ${jarConfig.label} jar yet!`);
+          hud.showToast(`لا توجد روابط في مرطبان «${jarConfig.label}» بعد!`);
           sfx.playClose();
           stage?.closeActiveJar();
           return;
@@ -140,7 +139,7 @@ function bootstrap(): void {
         if (drawCounter !== expectedToken) return;
         if (!preview) {
           hud.hideCard();
-          hud.showToast(`No links found in ${jarConfig.label} jar yet!`);
+          hud.showToast(`لا توجد روابط في مرطبان «${jarConfig.label}» بعد!`);
           sfx.playClose();
           stage?.closeActiveJar();
           return;
@@ -154,7 +153,7 @@ function bootstrap(): void {
     },
   });
 
-  // Preload all 5 CSV files in the background so jar note counts appear immediately
+  // Preload all 5 CSV files in the background so first jar click opens with zero fetch delay
   void jarStore.preloadAll().then((counts) => {
     hud.updateJarCounts(counts);
   });

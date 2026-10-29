@@ -178,13 +178,13 @@ describe('resolveLinkPreview', () => {
     );
 
     expect(preview.title).toBe('Mock Video');
-    expect(preview.description).toBe('Video by Mock Author');
+    expect(preview.description).toBe('مقطع بواسطة Mock Author');
     expect(preview.image).toBe('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
     expect(preview.siteName).toBe('YouTube');
     expect(preview.hostname).toBe('youtube.com');
     expect(preview.favicon).toBe('https://www.google.com/s2/favicons?domain=youtube.com&sz=64');
     expect(preview.jarId).toBe('youtube');
-    expect(preview.jarLabel).toBe('YouTube');
+    expect(preview.jarLabel).toBe('يوتيوب');
     expect(preview.accentColor).toBe('#ff4d6d');
     expect(requested).toContain('youtube.com/oembed');
   });
@@ -223,7 +223,7 @@ describe('resolveLinkPreview', () => {
     );
 
     expect(preview.title).toBe('Cool Article');
-    expect(preview.description).toBe('Click this unfolded note to open example.com in a new tab.');
+    expect(preview.description).toBe('اضغط على هذه الورقة لفتح example.com في تبويب جديد.');
     expect(preview.image).toBeNull();
     expect(preview.siteName).toBe('example.com');
     expect(preview.hostname).toBe('example.com');
