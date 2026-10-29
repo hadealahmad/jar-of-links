@@ -6,7 +6,7 @@ const HTTP_URL = /^https?:\/\//i;
 const DATA_IMAGE = /^data:image\//i;
 const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
-const DEFAULT_ACCENT = '#f59e0b';
+const DEFAULT_ACCENT = '#0582ca';
 const FALLBACK_TITLE = 'رابط بدون عنوان';
 const FALLBACK_DESCRIPTION = 'لا يوجد وصف متاح حالياً — افتح الورقة لاستكشاف الرابط.';
 
@@ -617,7 +617,7 @@ function buildEmergencyBanner(accent: string): string {
 
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90" shape-rendering="crispEdges">` +
-    `<rect width="160" height="90" fill="#241712"/>` +
+    `<rect width="160" height="90" fill="#131516"/>` +
     `<rect y="0" width="160" height="5" fill="${color}"/>` +
     `<rect y="85" width="160" height="5" fill="${color}"/>` +
     `<rect x="4" y="9" width="152" height="72" fill="none" stroke="${color}" stroke-width="2"/>` +

@@ -3,7 +3,9 @@ import type { JarConfig } from '../types';
 
 /* -------------------------------------------------------------------------
  * Built-in 5x7 bitmap pixel font (for ASCII hostnames & symbols)
- * + Hard-thresholded Handjet pixel renderer for connected Arabic typography!
+ * + Hard-thresholded Handjet pixel renderer for connected Arabic typography.
+ * Palette matched to https://hadealahmad.com (#0582CA, #006494, #131516,
+ * #1A1D1E, #202527, #283033, #2D353A, #DFE8EC, #EDF1F2, #F7F8F8).
  * ---------------------------------------------------------------------- */
 
 const GLYPH_WIDTH = 5;
@@ -75,14 +77,10 @@ const NON_ASCII_RE = /[^\x00-\x7f]/;
 const ARABIC_RE = /[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]/;
 
 export interface PixelTextOptions {
-  /** Integer pixel scale (1 = 5x7 tiny, 2/3 = chunky). Clamped to >= 1. */
   scale?: number;
   color?: string;
-  /** Optional offset colour painted behind the glyphs for a crisp emboss/drop shadow. */
   highlightColor?: string;
-  /** Integer offset of the highlight in output pixels. */
   highlightOffset?: number;
-  /** Blank pixel columns between glyphs (in font pixels, before scaling). */
   letterSpacing?: number;
   align?: 'left' | 'center' | 'right';
 }
@@ -133,7 +131,7 @@ export function drawPixelText(
     const highlightOffset = Math.max(1, Math.floor(options.highlightOffset ?? 1));
     paint(options.highlightColor, highlightOffset, highlightOffset);
   }
-  paint(options.color ?? '#231712', 0, 0);
+  paint(options.color ?? '#2D353A', 0, 0);
 
   return width;
 }
@@ -162,8 +160,7 @@ interface CrispFontOptions {
 
 /**
  * Renders connected Arabic (or Unicode) strings using the Google Font `Handjet`
- * onto an offscreen canvas and quantizes alpha into hard 1x1 integer pixels so
- * there is zero blurry anti-aliasing on low-res pixel textures.
+ * onto an offscreen canvas and quantizes alpha into hard 1x1 integer pixels.
  */
 function drawCrispFontText(
   ctx: CanvasRenderingContext2D,
@@ -177,7 +174,7 @@ function drawCrispFontText(
 
   const targetWidth = ctx.canvas.width;
   const targetHeight = ctx.canvas.height;
-  const { canvas: scratch, ctx: scratchCtx } = createCanvas(targetWidth, targetHeight);
+  const { ctx: scratchCtx } = createCanvas(targetWidth, targetHeight);
 
   const weight = options.fontWeight ?? 700;
   const minSize = options.minFontSize ?? 10;
@@ -232,7 +229,7 @@ function drawCrispFontText(
 }
 
 /* -------------------------------------------------------------------------
- * Small deterministic helpers (no Math.random in texture art).
+ * Small deterministic helpers.
  * ---------------------------------------------------------------------- */
 
 function hashString(value: string): number {
@@ -263,7 +260,7 @@ const HEX_PATTERN = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 function parseHex(hex: string): [number, number, number] {
   const match = HEX_PATTERN.exec((hex ?? '').trim());
-  let value = match ? match[1] : 'f5e6c8';
+  let value = match ? match[1] : 'F7F8F8';
   if (value.length === 3) {
     value = value
       .split('')
@@ -285,7 +282,6 @@ function normalizeHex(hex: string): string {
   return toHex(red, green, blue);
 }
 
-/** Blend two hex colours; `t = 0` returns `from`, `t = 1` returns `to`. */
 function mixHex(from: string, to: string, t: number): string {
   const [fr, fg, fb] = parseHex(from);
   const [tr, tg, tb] = parseHex(to);
@@ -316,7 +312,6 @@ function createCanvas(width: number, height: number): PixelCanvas {
   return { canvas, ctx };
 }
 
-/** All textures are crisp, sRGB, mipmap-free pixel art. */
 function createTexture(canvas: HTMLCanvasElement, repeat = false): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
@@ -332,7 +327,7 @@ function createTexture(canvas: HTMLCanvasElement, repeat = false): THREE.CanvasT
 }
 
 /* -------------------------------------------------------------------------
- * Jar parchment label (supports Handjet Arabic pixel text + live font upgrade).
+ * Jar label (hadealahmad.com light-surface palette: #F7F8F8, #EDF1F2, #DFE8EC, #2D353A).
  * ---------------------------------------------------------------------- */
 
 const LABEL_WIDTH = 128;
@@ -342,18 +337,18 @@ function paintJarLabelCanvas(ctx: CanvasRenderingContext2D, config: JarConfig): 
   const rng = createRng(`jar-label:${config.id}:${config.shortLabel}`);
   const accent = normalizeHex(config.accentColor);
 
-  // Dark stitched outer border.
-  ctx.fillStyle = '#2b1d14';
+  // Deep slate outer border (#131516).
+  ctx.fillStyle = '#131516';
   ctx.fillRect(0, 0, LABEL_WIDTH, LABEL_HEIGHT);
 
-  // Warm aged parchment face.
+  // Crisp cool paper face (#F7F8F8).
   const inset = 3;
-  ctx.fillStyle = '#f5e6c8';
+  ctx.fillStyle = '#F7F8F8';
   ctx.fillRect(inset, inset, LABEL_WIDTH - inset * 2, LABEL_HEIGHT - inset * 2);
 
-  // 2-tone pixel dither/aging concentrated near the edges.
-  const ageColors = ['#ead9b6', '#ddc79e', '#d3ba8c'];
-  for (let i = 0; i < 300; i++) {
+  // Subtle ice-slate pixel dither near edges (#EDF1F2, #DFE8EC, #C5CFD4).
+  const ageColors = ['#EDF1F2', '#DFE8EC', '#d2dee4'];
+  for (let i = 0; i < 280; i++) {
     const x = inset + Math.floor(rng() * (LABEL_WIDTH - inset * 2));
     const y = inset + Math.floor(rng() * (LABEL_HEIGHT - inset * 2));
     const edgeDistance = Math.min(
@@ -368,10 +363,10 @@ function paintJarLabelCanvas(ctx: CanvasRenderingContext2D, config: JarConfig): 
     ctx.fillRect(x, y, edgeDistance < 3 && rng() < 0.35 ? 2 : 1, 1);
   }
 
-  // Soft inner shading bevels.
-  ctx.fillStyle = '#ead9b6';
+  // Crisp top highlight & bottom bevel.
+  ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(inset + 1, inset + 1, LABEL_WIDTH - (inset + 1) * 2, 1);
-  ctx.fillStyle = '#ddc79e';
+  ctx.fillStyle = '#DFE8EC';
   ctx.fillRect(inset + 1, LABEL_HEIGHT - inset - 2, LABEL_WIDTH - (inset + 1) * 2, 1);
 
   // Inner accent frame (2px, integer-aligned).
@@ -391,18 +386,18 @@ function paintJarLabelCanvas(ctx: CanvasRenderingContext2D, config: JarConfig): 
     [LABEL_WIDTH - frame - 3, LABEL_HEIGHT - frame - 3],
   ];
   for (const [rx, ry] of rivets) {
-    ctx.fillStyle = '#2b1d14';
+    ctx.fillStyle = '#131516';
     ctx.fillRect(rx, ry, 4, 4);
     ctx.fillStyle = accent;
     ctx.fillRect(rx + 1, ry + 1, 2, 2);
-    ctx.fillStyle = '#fff8eb';
+    ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(rx + 1, ry + 1, 1, 1);
-    ctx.fillStyle = mixHex(accent, '#2b1d14', 0.4);
+    ctx.fillStyle = mixHex(accent, '#131516', 0.45);
     ctx.fillRect(rx + 2, ry + 2, 1, 1);
   }
 
-  // Tiny centred studs on the top and bottom of the parchment.
-  ctx.fillStyle = mixHex(accent, '#fff8eb', 0.25);
+  // Tiny centred studs on the top and bottom of the label.
+  ctx.fillStyle = mixHex(accent, '#2D353A', 0.25);
   for (const offset of [-8, 0, 8]) {
     ctx.fillRect(LABEL_WIDTH / 2 + offset, 5, 1, 1);
     ctx.fillRect(LABEL_WIDTH / 2 + offset, LABEL_HEIGHT - 6, 1, 1);
@@ -417,8 +412,8 @@ function paintJarLabelCanvas(ctx: CanvasRenderingContext2D, config: JarConfig): 
       fontSize: config.id === 'all' ? 31 : 27,
       minFontSize: 16,
       fontWeight: 800,
-      color: '#231712',
-      highlightColor: '#fff8eb',
+      color: '#2D353A',
+      highlightColor: '#FFFFFF',
       highlightOffset: 1,
       alphaThreshold: 110,
     });
@@ -433,8 +428,8 @@ function paintJarLabelCanvas(ctx: CanvasRenderingContext2D, config: JarConfig): 
     drawPixelText(ctx, text, LABEL_WIDTH / 2, textTop, {
       scale,
       align: 'center',
-      color: '#231712',
-      highlightColor: '#fff8eb',
+      color: '#2D353A',
+      highlightColor: '#FFFFFF',
       highlightOffset: 1,
     });
   }
@@ -445,7 +440,6 @@ export function createJarLabelTexture(config: JarConfig): THREE.CanvasTexture {
   paintJarLabelCanvas(ctx, config);
   const texture = createTexture(canvas);
 
-  // Re-paint the 3D jar label automatically once the Google Font `Handjet` finishes loading.
   if (typeof document !== 'undefined' && document.fonts) {
     const repaint = (): void => {
       paintJarLabelCanvas(ctx, config);
@@ -454,9 +448,7 @@ export function createJarLabelTexture(config: JarConfig): THREE.CanvasTexture {
     void document.fonts
       .load('800 28px "Handjet"', config.shortLabel || config.label)
       .then(repaint)
-      .catch(() => {
-        /* Keep initial pixelated fallback rendering if offline. */
-      });
+      .catch(() => {});
     void document.fonts.ready.then(repaint).catch(() => {});
   }
 
@@ -464,19 +456,18 @@ export function createJarLabelTexture(config: JarConfig): THREE.CanvasTexture {
 }
 
 /* -------------------------------------------------------------------------
- * Cork stopper grain.
+ * Natural muted driftwood-cork stopper grain.
  * ---------------------------------------------------------------------- */
 
 export function createCorkTexture(): THREE.CanvasTexture {
   const size = 32;
   const { canvas, ctx } = createCanvas(size, size);
-  const rng = createRng('cork-grain-v1');
+  const rng = createRng('cork-grain-v2');
 
-  ctx.fillStyle = '#b87d4b';
+  ctx.fillStyle = '#9e7b56';
   ctx.fillRect(0, 0, size, size);
 
-  // Broad mottled base variation.
-  const mottle = ['#b87d4b', '#ad7243', '#c18753'];
+  const mottle = ['#9e7b56', '#916f4c', '#ab8862'];
   for (let i = 0; i < 80; i++) {
     ctx.fillStyle = mottle[Math.floor(rng() * mottle.length)];
     ctx.fillRect(
@@ -487,8 +478,7 @@ export function createCorkTexture(): THREE.CanvasTexture {
     );
   }
 
-  // Fine cork speckles.
-  const speckles = ['#9c6334', '#d19a66', '#7a4922'];
+  const speckles = ['#7d5d3b', '#bfa07a', '#5e452c'];
   for (let i = 0; i < 210; i++) {
     ctx.fillStyle = speckles[Math.floor(rng() * speckles.length)];
     ctx.fillRect(
@@ -499,12 +489,11 @@ export function createCorkTexture(): THREE.CanvasTexture {
     );
   }
 
-  // Short wrapped grain dashes.
   for (let i = 0; i < 28; i++) {
     const x = Math.floor(rng() * size);
     const y = Math.floor(rng() * size);
     const length = 2 + Math.floor(rng() * 4);
-    ctx.fillStyle = rng() < 0.5 ? '#9c6334' : '#7a4922';
+    ctx.fillStyle = rng() < 0.5 ? '#7d5d3b' : '#5e452c';
     for (let k = 0; k < length; k++) {
       ctx.fillRect((x + k) % size, y, 1, 1);
     }
@@ -514,55 +503,52 @@ export function createCorkTexture(): THREE.CanvasTexture {
 }
 
 /* -------------------------------------------------------------------------
- * Cozy dark-oak shelf planks (seamlessly repeatable).
+ * Dark slate-ash shelf planks (hadealahmad.com dark palette: #202527, #283033, #131516).
  * ---------------------------------------------------------------------- */
 
 export function createWoodShelfTexture(): THREE.CanvasTexture {
   const size = 64;
   const { canvas, ctx } = createCanvas(size, size);
   const plankHeight = 16;
-  const plankColors = ['#4d3020', '#3d2518'];
+  const plankColors = ['#283033', '#202527'];
 
   for (let plank = 0; plank < size / plankHeight; plank++) {
     const top = plank * plankHeight;
     ctx.fillStyle = plankColors[plank % plankColors.length];
     ctx.fillRect(0, top, size, plankHeight);
 
-    // Plank seam: dark groove plus a warm highlight lip.
-    ctx.fillStyle = '#2b1910';
+    // Plank seam: deep #131516 groove plus cool slate-blue highlight lip.
+    ctx.fillStyle = '#131516';
     ctx.fillRect(0, top, size, 1);
-    ctx.fillStyle = '#5c3a28';
+    ctx.fillStyle = '#364247';
     ctx.fillRect(0, top + 1, size, 1);
 
-    // Grain streaks, wrapped horizontally to tile cleanly.
-    const grainRng = createRng(`wood-plank-${plank}`);
+    const grainRng = createRng(`slate-plank-${plank}`);
     for (let i = 0; i < 20; i++) {
       const y = top + 3 + Math.floor(grainRng() * (plankHeight - 5));
       const x = Math.floor(grainRng() * size);
       const length = 3 + Math.floor(grainRng() * 13);
-      ctx.fillStyle = grainRng() < 0.62 ? '#2b1910' : '#5c3a28';
+      ctx.fillStyle = grainRng() < 0.62 ? '#16191b' : '#323d42';
       for (let k = 0; k < length; k++) {
         ctx.fillRect((x + k) % size, y, 1, 1);
       }
     }
 
-    // Occasional knot.
     if (plank % 2 === 1) {
       const kx = 10 + Math.floor(grainRng() * 44);
       const ky = top + 6 + Math.floor(grainRng() * 5);
-      ctx.fillStyle = '#2b1910';
+      ctx.fillStyle = '#131516';
       ctx.fillRect(kx, ky, 3, 2);
       ctx.fillRect(kx + 1, ky - 1, 1, 1);
-      ctx.fillStyle = '#5c3a28';
+      ctx.fillStyle = '#364247';
       ctx.fillRect(kx, ky - 1, 1, 1);
       ctx.fillRect(kx + 1, ky + 2, 1, 1);
     }
   }
 
-  // Fine cross-plank grain flecks.
-  const fineRng = createRng('wood-fine-grain');
+  const fineRng = createRng('slate-fine-grain');
   for (let i = 0; i < 44; i++) {
-    ctx.fillStyle = fineRng() < 0.5 ? '#3d2518' : '#5c3a28';
+    ctx.fillStyle = fineRng() < 0.5 ? '#1A1D1E' : '#364247';
     const y = Math.floor(fineRng() * size);
     const x = Math.floor(fineRng() * size);
     const length = 2 + Math.floor(fineRng() * 6);
@@ -575,46 +561,41 @@ export function createWoodShelfTexture(): THREE.CanvasTexture {
 }
 
 /* -------------------------------------------------------------------------
- * Folded paper notes (tinted per jar palette).
+ * Folded paper notes (tinted per jar palette with cool slate ink).
  * ---------------------------------------------------------------------- */
 
 export function createPaperSlipTexture(baseHex: string): THREE.CanvasTexture {
   const size = 32;
   const { canvas, ctx } = createCanvas(size, size);
   const base = normalizeHex(baseHex);
-  const border = mixHex(base, '#3a2b21', 0.3);
-  const light = mixHex(base, '#ffffff', 0.35);
-  const ink = mixHex(base, '#2b1d14', 0.72);
+  const border = mixHex(base, '#131516', 0.34);
+  const light = mixHex(base, '#FFFFFF', 0.4);
+  const ink = mixHex(base, '#2D353A', 0.74);
   const rng = createRng(`paper-slip:${base}`);
 
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, size, size);
 
-  // Paper fibre noise.
   for (let i = 0; i < 36; i++) {
     ctx.fillStyle = rng() < 0.5 ? light : border;
     ctx.fillRect(Math.floor(rng() * size), Math.floor(rng() * size), 1, 1);
   }
 
-  // Light bevel on the top and left.
   ctx.fillStyle = light;
   ctx.fillRect(1, 1, size - 2, 1);
   ctx.fillRect(1, 1, 1, size - 2);
 
-  // Dark pixel border.
   ctx.fillStyle = border;
   ctx.fillRect(0, 0, size, 1);
   ctx.fillRect(0, size - 1, size, 1);
   ctx.fillRect(0, 0, 1, size);
   ctx.fillRect(size - 1, 0, 1, size);
 
-  // Horizontal fold crease across the middle.
   ctx.fillStyle = border;
   ctx.fillRect(2, 16, size - 4, 1);
   ctx.fillStyle = light;
   ctx.fillRect(2, 17, size - 4, 1);
 
-  // Dog-eared bottom-right corner.
   for (let y = size - 7; y < size; y++) {
     for (let x = size - 7; x < size; x++) {
       if (x + y >= 57) {
@@ -627,7 +608,6 @@ export function createPaperSlipTexture(baseHex: string): THREE.CanvasTexture {
     }
   }
 
-  // Tiny pixel "handwriting" squiggle bars.
   const handwritingRows = [6, 9, 12, 20, 23, 26];
   for (const row of handwritingRows) {
     let x = 5 + Math.floor(rng() * 3);
@@ -645,7 +625,7 @@ export function createPaperSlipTexture(baseHex: string): THREE.CanvasTexture {
 }
 
 /* -------------------------------------------------------------------------
- * Deterministic procedural OG fallback banner.
+ * Deterministic procedural OG fallback banner (hadealahmad.com slate + cerulean).
  * ---------------------------------------------------------------------- */
 
 function drawSparkle(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, color: string): void {
@@ -667,16 +647,15 @@ function drawPixelJarIcon(
   top: number,
   accent: string,
 ): void {
-  const dark = '#191126';
-  const glass = mixHex(accent, '#fff8eb', 0.35);
-  const glassDeep = mixHex(accent, '#191126', 0.35);
-  const glint = mixHex('#fff8eb', accent, 0.2);
-  const corkDark = '#8a5a33';
-  const corkLight = '#b8834f';
+  const dark = '#131516';
+  const glass = mixHex(accent, '#F7F8F8', 0.38);
+  const glassDeep = mixHex(accent, '#131516', 0.42);
+  const glint = mixHex('#FFFFFF', accent, 0.18);
+  const corkDark = '#7d5d3b';
+  const corkLight = '#ab8862';
   const x = Math.round(centerX);
   const y = Math.round(top);
 
-  // Cork stopper.
   ctx.fillStyle = corkDark;
   ctx.fillRect(x - 4, y, 9, 3);
   ctx.fillStyle = corkLight;
@@ -684,37 +663,32 @@ function drawPixelJarIcon(
   ctx.fillStyle = dark;
   ctx.fillRect(x - 5, y + 2, 11, 1);
 
-  // Neck.
   ctx.fillStyle = dark;
   ctx.fillRect(x - 4, y + 3, 9, 2);
   ctx.fillStyle = glass;
   ctx.fillRect(x - 3, y + 3, 7, 1);
 
-  // Jar body tinted glass.
   ctx.fillStyle = glassDeep;
   ctx.fillRect(x - 9, y + 5, 19, 14);
   ctx.fillStyle = glass;
   ctx.fillRect(x - 8, y + 6, 17, 12);
 
-  // Folded paper slips inside.
-  const slips = ['#fff8eb', mixHex(accent, '#ffffff', 0.4), '#ffd166'];
+  const slips = ['#F7F8F8', mixHex(accent, '#FFFFFF', 0.45), '#7cc6fe'];
   for (let i = 0; i < slips.length; i++) {
     const slipX = x - 5 + i * 3;
     const slipY = y + 11 + (i % 2);
     ctx.fillStyle = slips[i];
     ctx.fillRect(slipX, slipY, 3, 6 - (i % 2));
-    ctx.fillStyle = mixHex(slips[i], '#2b1d14', 0.35);
+    ctx.fillStyle = mixHex(slips[i], '#131516', 0.35);
     ctx.fillRect(slipX, slipY, 3, 1);
   }
 
-  // Glass glint.
   ctx.fillStyle = glint;
   ctx.fillRect(x - 6, y + 7, 1, 6);
   ctx.globalAlpha = 0.6;
   ctx.fillRect(x - 7, y + 7, 1, 3);
   ctx.globalAlpha = 1;
 
-  // Crisp dark outline.
   ctx.fillStyle = dark;
   ctx.fillRect(x - 9, y + 5, 19, 1);
   ctx.fillRect(x - 9, y + 18, 19, 1);
@@ -732,21 +706,19 @@ export function generateFallbackOgDataUrl(title: string, hostname: string, accen
   const rng = createRng(seed);
   const horizon = 60;
 
-  const skyTop = mixHex('#151129', accent, 0.1);
-  const skyMid = mixHex('#241c40', accent, 0.16);
-  const skyLow = mixHex('#3b2a55', accent, 0.22);
-  const skyGlow = mixHex('#5a3c70', accent, 0.28);
-  const frameDark = '#110c18';
-  const accentBright = mixHex(accent, '#ffffff', 0.35);
+  const skyTop = mixHex('#131516', accent, 0.08);
+  const skyMid = mixHex('#1A1D1E', accent, 0.14);
+  const skyLow = mixHex('#202527', accent, 0.22);
+  const skyGlow = mixHex('#006494', accent, 0.35);
+  const frameDark = '#131516';
+  const accentBright = mixHex(accent, '#FFFFFF', 0.35);
 
-  // Twilight sky, banded in 2px strips.
   for (let y = 0; y < horizon; y += 2) {
     const t = y / horizon;
     ctx.fillStyle = t < 0.32 ? skyTop : t < 0.7 ? skyMid : skyLow;
     ctx.fillRect(0, y, width, 2);
   }
 
-  // Warm accent haze near the horizon.
   ctx.globalAlpha = 0.5;
   for (let y = horizon - 12; y < horizon; y += 2) {
     ctx.fillStyle = skyGlow;
@@ -754,7 +726,6 @@ export function generateFallbackOgDataUrl(title: string, hostname: string, accen
   }
   ctx.globalAlpha = 1;
 
-  // Checkerboard dither texture.
   for (let y = 0; y < horizon; y++) {
     for (let x = 0; x < width; x++) {
       if (((x + y) & 1) === 0 && rng() < 0.16) {
@@ -764,13 +735,12 @@ export function generateFallbackOgDataUrl(title: string, hostname: string, accen
     }
   }
 
-  // Deterministic stars, kept clear of the jar icon.
   for (let i = 0; i < 30; i++) {
     const starX = 5 + Math.floor(rng() * (width - 10));
     const starY = 5 + Math.floor(rng() * 26);
     if (starX > 58 && starX < 102) continue;
     const bright = rng() < 0.22;
-    ctx.fillStyle = bright ? '#fff8eb' : mixHex('#b9c6ff', accent, 0.3);
+    ctx.fillStyle = bright ? '#F7F8F8' : mixHex('#C5CFD4', accent, 0.35);
     ctx.fillRect(starX, starY, bright ? 2 : 1, 1);
     if (bright) {
       ctx.globalAlpha = 0.65;
@@ -782,16 +752,15 @@ export function generateFallbackOgDataUrl(title: string, hostname: string, accen
     }
   }
 
-  // Retro grid floor below the horizon.
-  ctx.fillStyle = mixHex('#0f0b1a', accent, 0.1);
+  ctx.fillStyle = mixHex('#131516', accent, 0.08);
   ctx.fillRect(0, horizon, width, height - horizon);
-  ctx.fillStyle = mixHex(accent, '#0f0b1a', 0.45);
+  ctx.fillStyle = mixHex(accent, '#131516', 0.42);
   ctx.fillRect(3, horizon, width - 6, 1);
-  ctx.fillStyle = mixHex(accent, '#0f0b1a', 0.7);
+  ctx.fillStyle = mixHex(accent, '#131516', 0.68);
   ctx.fillRect(3, horizon + 1, width - 6, 1);
 
   ctx.globalAlpha = 0.55;
-  ctx.fillStyle = mixHex('#1a1329', accent, 0.55);
+  ctx.fillStyle = mixHex('#202527', accent, 0.52);
   for (let gridX = 8; gridX < width - 4; gridX += 10) {
     ctx.fillRect(gridX, horizon + 2, 1, height - horizon - 2);
   }
@@ -800,14 +769,13 @@ export function generateFallbackOgDataUrl(title: string, hostname: string, accen
   }
   ctx.globalAlpha = 1;
 
-  // Pixel-art decorative frame with corner rivets.
   ctx.fillStyle = frameDark;
   ctx.fillRect(0, 0, width, 2);
   ctx.fillRect(0, height - 2, width, 2);
   ctx.fillRect(0, 0, 2, height);
   ctx.fillRect(width - 2, 0, 2, height);
 
-  ctx.fillStyle = mixHex(accent, '#110c18', 0.25);
+  ctx.fillStyle = mixHex(accent, '#131516', 0.25);
   ctx.fillRect(3, 3, width - 6, 1);
   ctx.fillRect(3, height - 4, width - 6, 1);
   ctx.fillRect(3, 3, 1, height - 6);
@@ -826,20 +794,18 @@ export function generateFallbackOgDataUrl(title: string, hostname: string, accen
     ctx.fillRect(rivetX + 1, rivetY + 1, 1, 1);
   }
 
-  // Tiny jar icon and sparkles.
   drawPixelJarIcon(ctx, width / 2, 8, accent);
   drawSparkle(ctx, 64, 14, accentBright);
   drawSparkle(ctx, 96, 21, accentBright);
 
-  // Uppercase hostname.
   const rawHost = (hostname || 'jar.hadealahmad.com').trim();
   if (NON_ASCII_RE.test(rawHost)) {
     drawCrispFontText(ctx, rawHost, width / 2, 35, {
       maxWidth: width - 20,
       fontSize: 13,
       minFontSize: 10,
-      color: '#fff8eb',
-      highlightColor: '#0b0714',
+      color: '#F7F8F8',
+      highlightColor: '#131516',
       highlightOffset: 1,
     });
   } else {
@@ -847,21 +813,20 @@ export function generateFallbackOgDataUrl(title: string, hostname: string, accen
     drawPixelText(ctx, hostText, width / 2, 32, {
       scale: 1,
       align: 'center',
-      color: '#fff8eb',
-      highlightColor: '#0b0714',
+      color: '#F7F8F8',
+      highlightColor: '#131516',
       highlightOffset: 1,
     });
   }
 
-  // Truncated title line (supports both Arabic and English titles).
   const rawTitle = (title || 'كنز صغير من المرطبان').trim();
   if (NON_ASCII_RE.test(rawTitle)) {
     drawCrispFontText(ctx, rawTitle, width / 2, 46, {
       maxWidth: width - 18,
       fontSize: 13,
       minFontSize: 10,
-      color: '#d8cfae',
-      highlightColor: '#0b0714',
+      color: '#C5CFD4',
+      highlightColor: '#131516',
       highlightOffset: 1,
     });
   } else {
@@ -869,35 +834,32 @@ export function generateFallbackOgDataUrl(title: string, hostname: string, accen
     drawPixelText(ctx, titleText, width / 2, 44, {
       scale: 1,
       align: 'center',
-      color: '#d8cfae',
-      highlightColor: '#0b0714',
+      color: '#C5CFD4',
+      highlightColor: '#131516',
       highlightOffset: 1,
     });
   }
 
-  // Star divider.
-  ctx.fillStyle = mixHex(accent, '#110c18', 0.35);
+  ctx.fillStyle = mixHex(accent, '#131516', 0.35);
   ctx.fillRect(width / 2 - 30, 54, 22, 1);
   ctx.fillRect(width / 2 + 8, 54, 22, 1);
   drawPixelText(ctx, '\u2605', width / 2, 51, {
     color: accentBright,
-    highlightColor: '#0b0714',
+    highlightColor: '#131516',
     highlightOffset: 1,
     align: 'center',
   });
 
-  // Arabic footer brand stamp on the grid.
   drawCrispFontText(ctx, 'مرطبان الروابط', width / 2, 71, {
     maxWidth: width - 24,
     fontSize: 14,
     minFontSize: 11,
     fontWeight: 700,
-    color: mixHex(accent, '#fff8eb', 0.25),
-    highlightColor: '#0b0714',
+    color: mixHex(accent, '#F7F8F8', 0.25),
+    highlightColor: '#131516',
     highlightOffset: 1,
   });
 
-  // Upscale 2x with hard pixels (160x90 -> 320x180).
   const scaled = document.createElement('canvas');
   scaled.width = width * 2;
   scaled.height = height * 2;

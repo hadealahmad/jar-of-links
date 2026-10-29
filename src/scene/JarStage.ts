@@ -15,6 +15,9 @@ const FOCAL_Z_RATIO = 0.15;
 const FOCAL_Z_MIN = 0.8;
 const FOCAL_Z_MAX = 4.0;
 
+/** Exact dark-mode body background of https://hadealahmad.com (--theme-palette-color-7) */
+const STAGE_BG_HEX = 0x1a1d1e;
+
 const DURATIONS = {
   picking: 0.42,
   opening: 0.36,
@@ -109,9 +112,7 @@ function createDesktopLayout(): StageLayout {
     mode: 'desktop',
     slots,
     shelves: [
-      // Wide main plank.
       { x: 0, y: -0.92, z: 0, width: 12.2, height: 0.34, depth: 1.7 },
-      // Raised center pedestal block.
       { x: 0, y: -1.0, z: 0.35, width: 3.0, height: 0.52, depth: 2.0 },
     ],
     width: (5.0 + JAR_HALF_WIDTH) * 2,
@@ -136,11 +137,8 @@ function createMobileLayout(): StageLayout {
     mode: 'mobile',
     slots,
     shelves: [
-      // Top tier (set slightly back so the tall center jar's cork clears it).
       { x: 0, y: 2.3, z: -1.0, width: 4.5, height: 0.3, depth: 1.2 },
-      // Center hero tier.
       { x: 0, y: -0.53, z: 0, width: 3.2, height: 0.36, depth: 1.6 },
-      // Bottom tier.
       { x: 0, y: -3.1, z: 0, width: 4.5, height: 0.3, depth: 1.4 },
     ],
     width: (1.65 + JAR_HALF_WIDTH) * 2,
@@ -150,8 +148,7 @@ function createMobileLayout(): StageLayout {
 }
 
 /**
- * Full Three.js stage: low-resolution pixelated renderer, cozy shelves,
- * five jars, raycast hover/tap handling and the four-step opening choreography.
+ * Full Three.js stage styled with https://hadealahmad.com's dark slate & cerulean palette.
  */
 export class JarStage {
   private readonly canvas: HTMLCanvasElement;
@@ -208,7 +205,7 @@ export class JarStage {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.setPixelRatio(1);
-    this.renderer.setClearColor(0x140f1d, 1);
+    this.renderer.setClearColor(STAGE_BG_HEX, 1);
 
     this.canvas.style.width = '100%';
     this.canvas.style.height = '100%';
@@ -217,7 +214,7 @@ export class JarStage {
     this.canvas.style.cursor = 'default';
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x140f1d);
+    this.scene.background = new THREE.Color(STAGE_BG_HEX);
 
     this.camera = new THREE.PerspectiveCamera(V_FOV_DEG, 1, 0.1, 200);
 
@@ -233,51 +230,52 @@ export class JarStage {
   }
 
   // ---------------------------------------------------------------------------
-  // Scene setup
+  // Scene setup (hadealahmad.com slate + #0582CA / #006494 studio lighting)
   // ---------------------------------------------------------------------------
 
   private setupLights(): void {
-    this.scene.add(new THREE.AmbientLight(0x6b5a94, 1.05));
+    this.scene.add(new THREE.AmbientLight(0x88a2b0, 1.15));
 
-    const hemisphere = new THREE.HemisphereLight(0xffd9a8, 0x241a36, 0.75);
+    const hemisphere = new THREE.HemisphereLight(0xf7f8f8, 0x131516, 0.8);
     this.scene.add(hemisphere);
 
-    const key = new THREE.DirectionalLight(0xffd7a1, 2.1);
+    const key = new THREE.DirectionalLight(0xf7f8f8, 2.05);
     key.position.set(5, 9, 8);
     this.scene.add(key);
 
-    const rim = new THREE.DirectionalLight(0x9a7bff, 1.5);
-    rim.position.set(-7, 5, -6);
-    this.scene.add(rim);
+    const ceruleanRim = new THREE.DirectionalLight(0x0582ca, 1.65);
+    ceruleanRim.position.set(-7, 5, -6);
+    this.scene.add(ceruleanRim);
 
-    const fill = new THREE.DirectionalLight(0x8ecbff, 0.45);
-    fill.position.set(0, 3, 9);
-    this.scene.add(fill);
+    const deepSeaFill = new THREE.DirectionalLight(0x006494, 0.7);
+    deepSeaFill.position.set(0, 3, 9);
+    this.scene.add(deepSeaFill);
 
-    const warmFront = new THREE.DirectionalLight(0xffe6c4, 0.55);
-    warmFront.position.set(0, 2, 10);
-    this.scene.add(warmFront);
+    const crispFront = new THREE.DirectionalLight(0xedf1f2, 0.55);
+    crispFront.position.set(0, 2, 10);
+    this.scene.add(crispFront);
 
-    const warmGlow = new THREE.PointLight(0xffb066, 14, 26, 2);
-    warmGlow.position.set(0, 2.6, 6);
-    this.scene.add(warmGlow);
+    const cyanGlow = new THREE.PointLight(0x38b6ff, 12, 26, 2);
+    cyanGlow.position.set(0, 2.6, 6);
+    this.scene.add(cyanGlow);
   }
 
   private setupStars(): void {
     const random = mulberry32(0x51a7c0de);
-    const colors = [0xfff3c4, 0xc4b5fd, 0xa5f3fc, 0xffd6e8];
+    // Cool cerulean, sky cyan, slate-mist, and crisp off-white pixel motes
+    const colors = [0x0582ca, 0x38b6ff, 0xc5cfd4, 0xedf1f2];
 
     for (let i = 0; i < 45; i += 1) {
       const material = new THREE.MeshBasicMaterial({
         color: colors[i % colors.length],
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.45,
         depthWrite: false,
         toneMapped: false,
       });
       const mesh = new THREE.Mesh(this.starGeometry, material);
 
-      const size = 0.07 + random() * 0.13;
+      const size = 0.07 + random() * 0.12;
       const baseX = (random() - 0.5) * 30;
       const baseY = -6 + random() * 16;
       const z = -20 + random() * 12;
@@ -292,7 +290,7 @@ export class JarStage {
         material,
         baseX,
         baseY,
-        baseOpacity: 0.32 + random() * 0.4,
+        baseOpacity: 0.28 + random() * 0.38,
         size,
         phase: random() * Math.PI * 2,
         speed: 0.5 + random() * 1.4,
@@ -307,7 +305,7 @@ export class JarStage {
     texture.colorSpace = THREE.SRGBColorSpace;
     this.woodMaterial = new THREE.MeshLambertMaterial({
       map: texture,
-      emissive: new THREE.Color(0x1b0f08),
+      emissive: new THREE.Color(0x0c0e0f),
     });
 
     for (let i = 0; i < 5; i += 1) {
@@ -325,9 +323,9 @@ export class JarStage {
       this.hitMeshes.push(mesh.hitMesh);
 
       const shadowMaterial = new THREE.MeshBasicMaterial({
-        color: 0x0a0710,
+        color: 0x0b0d0e,
         transparent: true,
-        opacity: 0.32,
+        opacity: 0.36,
         depthWrite: false,
         toneMapped: false,
       });
@@ -395,8 +393,6 @@ export class JarStage {
 
     let distance = Math.max(halfHeight / vTan, halfWidth / hTan) + 0.7;
 
-    // Guarantee the extracted + unfolded hero note also fits on screen,
-    // even on short/ultrawide viewports where the shelf framing is close.
     const maxFocalScale = 1.38 * FOCAL_SCALE;
     const paperHalfHeight = (JAR_PAPER_TOP * maxFocalScale) / 2;
     const paperForward = 0.55 * maxFocalScale;
@@ -733,7 +729,7 @@ export class JarStage {
       runtime.mesh.setLabelOpacity(active ? 1 : 1 - selection * 0.9);
       runtime.mesh.updateIdle(time, dt);
 
-      runtime.shadowMaterial.opacity = active ? 0.32 * (1 - selection * 0.85) : 0.32;
+      runtime.shadowMaterial.opacity = active ? 0.36 * (1 - selection * 0.85) : 0.36;
     }
 
     for (const star of this.stars) {

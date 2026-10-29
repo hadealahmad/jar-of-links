@@ -1,10 +1,13 @@
 /* ==========================================================================
    JAR OF LINKS — Arabic RTL retro pixel UI & unfolded paper link card
-   Google Font: Handjet (modular square pixel Arabic + Latin typeface).
+   Color scheme directly from https://hadealahmad.com:
+     Dark mode:  #131516, #1A1D1E, #202527, #283033, #C5CFD4, #C7CED2
+     Light mode: #FFFFFF, #F7F8F8, #EDF1F2, #DFE8EC, #2D353A, #2E3539
+     Accents:    #0582CA (cerulean) & #006494 (deep sea blue)
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   1. Full-bleed viewport reset
+   1. Full-bleed viewport reset & hadealahmad.com palette tokens
    -------------------------------------------------------------------------- */
 
 :root {
@@ -12,25 +15,26 @@
 
   --font-pixel-ar: 'Handjet', 'Silkscreen', Tahoma, monospace;
 
-  --bg-deep: #140f1d;
-  --bg-panel: #1b1329;
-  --bg-panel-raised: #2a1f3f;
-  --bg-panel-hover: #372a52;
+  /* Exact Blocksy dark-mode palette from hadealahmad.com */
+  --ha-primary: #0582ca;
+  --ha-primary-deep: #006494;
+  --ha-dark-bg: #1a1d1e;
+  --ha-dark-deep: #131516;
+  --ha-dark-card: #202527;
+  --ha-dark-border: #283033;
+  --ha-dark-text: #c5cfd4;
+  --ha-dark-heading: #c7ced2;
 
-  --edge-ink: #0b0712;
-  --edge-step: #3b2b55;
+  /* Exact Blocksy light-mode palette from hadealahmad.com (used on paper card) */
+  --ha-paper-white: #ffffff;
+  --ha-paper-bg: #f7f8f8;
+  --ha-paper-shade: #edf1f2;
+  --ha-paper-border: #dfe8ec;
+  --ha-paper-ink: #2d353a;
+  --ha-paper-heading: #2e3539;
+  --ha-paper-muted: rgba(45, 53, 58, 0.72);
 
-  --ink: #f4ead3;
-  --ink-muted: #b9a9d6;
-  --gold: #f7d774;
-  --gold-deep: #f5c451;
-
-  --parchment: #fbf2dc;
-  --parchment-shade: #f6e9cb;
-  --paper-ink: #241712;
-  --paper-ink-soft: rgba(36, 23, 18, 0.72);
-
-  --accent: #f59e0b;
+  --accent: var(--ha-primary);
 }
 
 *,
@@ -48,8 +52,8 @@ body,
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: var(--bg-deep);
-  color: var(--ink);
+  background: var(--ha-dark-bg);
+  color: var(--ha-dark-text);
   direction: rtl;
 }
 
@@ -70,8 +74,8 @@ body {
 }
 
 ::selection {
-  background: var(--gold);
-  color: var(--edge-ink);
+  background: var(--ha-primary);
+  color: #ffffff;
 }
 
 /* --------------------------------------------------------------------------
@@ -91,7 +95,7 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   3. HUD root & CRT scanlines (top & bottom bars removed)
+   3. HUD root, subtle hadealahmad.com diamond pattern + CRT scanlines
    -------------------------------------------------------------------------- */
 
 #hud-root {
@@ -116,11 +120,11 @@ body {
   inset: 0;
   z-index: 90;
   pointer-events: none;
-  opacity: 0.04;
+  opacity: 0.035;
   background-image: repeating-linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.85) 0,
-    rgba(0, 0, 0, 0.85) 1px,
+    rgba(19, 21, 22, 0.9) 0,
+    rgba(19, 21, 22, 0.9) 1px,
     transparent 1px,
     transparent 3px
   );
@@ -145,14 +149,14 @@ body {
   line-height: 1.25;
   letter-spacing: 0;
   text-decoration: none;
-  color: var(--ink);
-  background: var(--bg-panel-raised);
-  border: 3px solid var(--edge-ink);
+  color: #ffffff;
+  background: var(--ha-primary-deep);
+  border: 3px solid var(--ha-dark-deep);
   border-radius: 0;
   box-shadow:
-    inset -3px -3px 0 0 rgba(0, 0, 0, 0.42),
-    inset 3px 3px 0 0 rgba(255, 255, 255, 0.1),
-    0 4px 0 0 var(--edge-ink);
+    inset -3px -3px 0 0 rgba(0, 0, 0, 0.32),
+    inset 3px 3px 0 0 rgba(255, 255, 255, 0.14),
+    0 4px 0 0 var(--ha-dark-deep);
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -163,21 +167,21 @@ body {
 }
 
 .pixel-btn:hover {
-  background: var(--bg-panel-hover);
+  background: var(--ha-primary);
 }
 
 .pixel-btn:active {
   transform: translateY(2px);
   box-shadow:
-    inset 3px 3px 0 0 rgba(0, 0, 0, 0.35),
-    inset -3px -3px 0 0 rgba(255, 255, 255, 0.06),
-    0 2px 0 0 var(--edge-ink);
+    inset 3px 3px 0 0 rgba(0, 0, 0, 0.3),
+    inset -3px -3px 0 0 rgba(255, 255, 255, 0.08),
+    0 2px 0 0 var(--ha-dark-deep);
 }
 
 .pixel-btn:focus-visible,
 .paper-close:focus-visible,
 .paper-card-link:focus-visible {
-  outline: 3px solid var(--gold);
+  outline: 3px solid var(--ha-primary);
   outline-offset: 3px;
 }
 
@@ -204,7 +208,9 @@ body {
 .card-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(12, 8, 20, 0.72);
+  background-color: rgba(19, 21, 22, 0.8);
+  /* Subtle geometric pattern-1.svg motif from hadealahmad.com */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath fill='none' stroke='%23C5CFD4' stroke-linecap='square' stroke-opacity='.06' stroke-width='.7' d='M15.986 4.186 4.1 16.072v.58L16.566 4.186Zm7.62 0 12.38 12.38v-.58l-11.8-11.8Zm12.38 19.248L23.52 35.9h.58l11.886-11.886ZM4.1 23.52v.58l11.8 11.8h.58z'/%3E%3C/svg%3E");
   cursor: pointer;
 }
 
@@ -222,7 +228,7 @@ body {
 }
 
 .paper-card {
-  --card-accent: var(--accent);
+  --card-accent: var(--ha-primary);
   position: relative;
   z-index: 1;
   display: flex;
@@ -232,15 +238,20 @@ body {
   overflow: hidden;
   direction: rtl;
   text-align: right;
-  background-color: var(--parchment);
-  background-image: linear-gradient(180deg, #fdf6e4 0%, var(--parchment) 55%, var(--parchment-shade) 100%);
-  border: 4px solid var(--paper-ink);
+  background-color: var(--ha-paper-bg);
+  background-image: linear-gradient(
+    180deg,
+    var(--ha-paper-white) 0%,
+    var(--ha-paper-bg) 55%,
+    var(--ha-paper-shade) 100%
+  );
+  border: 4px solid var(--ha-paper-ink);
   border-radius: 0;
   box-shadow:
-    0 0 0 4px #0c0813,
-    0 0 0 6px #4a3524,
-    0 16px 0 0 rgba(0, 0, 0, 0.3);
-  color: var(--paper-ink);
+    0 0 0 4px var(--ha-dark-deep),
+    0 0 0 6px var(--ha-dark-border),
+    0 16px 0 0 rgba(0, 0, 0, 0.38);
+  color: var(--ha-paper-ink);
   transform-origin: 50% 100%;
   transform-style: preserve-3d;
   will-change: transform, opacity;
@@ -261,10 +272,10 @@ body {
   inset: 0;
   z-index: 3;
   pointer-events: none;
-  opacity: 0.05;
+  opacity: 0.04;
   background-image:
-    radial-gradient(rgba(36, 23, 18, 0.9) 0.5px, transparent 0.5px),
-    radial-gradient(rgba(36, 23, 18, 0.7) 0.5px, transparent 0.5px);
+    radial-gradient(rgba(45, 53, 58, 0.9) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(45, 53, 58, 0.7) 0.5px, transparent 0.5px);
   background-size: 5px 5px, 7px 7px;
   background-position: 0 0, 2px 3px;
 }
@@ -284,16 +295,16 @@ body {
     to bottom,
     transparent 0,
     transparent 4px,
-    rgba(36, 23, 18, 0.1) 4px,
-    rgba(36, 23, 18, 0.1) 5px,
-    rgba(255, 255, 255, 0.55) 5px,
-    rgba(255, 255, 255, 0.55) 6px,
+    rgba(45, 53, 58, 0.09) 4px,
+    rgba(45, 53, 58, 0.09) 5px,
+    rgba(255, 255, 255, 0.75) 5px,
+    rgba(255, 255, 255, 0.75) 6px,
     transparent 6px,
     transparent 12px
   );
 }
 
-/* Card header: wax stamp (right in RTL) + close (left in RTL) */
+/* Card header: category stamp + close */
 .paper-head {
   position: relative;
   z-index: 2;
@@ -302,8 +313,8 @@ body {
   justify-content: space-between;
   gap: 8px;
   padding: 10px 12px 8px;
-  border-bottom: 3px solid rgba(36, 23, 18, 0.18);
-  background: rgba(255, 255, 255, 0.22);
+  border-bottom: 3px solid var(--ha-paper-border);
+  background: var(--ha-paper-shade);
 }
 
 .paper-stamp {
@@ -316,15 +327,15 @@ body {
   font-family: var(--font-pixel-ar);
   font-variation-settings: 'ELSH' 2, 'ELGR' 1;
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.2;
   letter-spacing: 0;
-  color: #1a1109;
+  color: #ffffff;
   background: var(--card-accent);
-  border: 2px solid var(--paper-ink);
+  border: 2px solid var(--ha-paper-ink);
   border-radius: 0;
-  box-shadow: -2px 2px 0 0 var(--paper-ink);
-  transform: rotate(1.5deg);
+  box-shadow: -2px 2px 0 0 var(--ha-paper-ink);
+  transform: rotate(1.2deg);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -342,13 +353,13 @@ body {
   font-size: 16px;
   font-weight: 700;
   line-height: 1;
-  color: var(--parchment);
-  background: var(--paper-ink);
-  border: 2px solid var(--paper-ink);
+  color: var(--ha-paper-white);
+  background: var(--ha-paper-ink);
+  border: 2px solid var(--ha-paper-ink);
   border-radius: 0;
   box-shadow:
-    inset -2px -2px 0 0 rgba(0, 0, 0, 0.5),
-    -2px 2px 0 0 rgba(36, 23, 18, 0.4);
+    inset -2px -2px 0 0 rgba(0, 0, 0, 0.4),
+    -2px 2px 0 0 rgba(45, 53, 58, 0.3);
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -358,7 +369,8 @@ body {
 }
 
 .paper-close:hover {
-  background: #3a261c;
+  background: var(--ha-primary-deep);
+  border-color: var(--ha-paper-ink);
 }
 
 .paper-close:active {
@@ -379,11 +391,11 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  color: var(--paper-ink);
+  color: var(--ha-paper-ink);
   text-decoration: none;
   cursor: pointer;
   scrollbar-width: thin;
-  scrollbar-color: var(--paper-ink) #e3d3ae;
+  scrollbar-color: var(--ha-paper-ink) var(--ha-paper-border);
 }
 
 .paper-card-link::-webkit-scrollbar {
@@ -391,12 +403,12 @@ body {
 }
 
 .paper-card-link::-webkit-scrollbar-track {
-  background: #e3d3ae;
+  background: var(--ha-paper-border);
 }
 
 .paper-card-link::-webkit-scrollbar-thumb {
-  background: var(--paper-ink);
-  border: 2px solid #e3d3ae;
+  background: var(--ha-paper-ink);
+  border: 2px solid var(--ha-paper-border);
 }
 
 .paper-card-link[aria-busy='true'] {
@@ -409,11 +421,12 @@ body {
 }
 
 .paper-card-link:hover .paper-open-badge {
-  background: var(--paper-ink);
-  color: var(--gold);
+  background: var(--ha-primary);
+  color: #ffffff;
 }
 
 .paper-card-link:hover .paper-title {
+  color: var(--ha-primary-deep);
   text-decoration: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
@@ -426,12 +439,12 @@ body {
   aspect-ratio: 16 / 9;
   margin: 0 0 10px;
   overflow: hidden;
-  background: #e7d9b6;
-  border: 3px solid var(--paper-ink);
+  background: var(--ha-paper-border);
+  border: 3px solid var(--ha-paper-ink);
   border-radius: 0;
   box-shadow:
-    inset 0 0 0 3px var(--parchment),
-    -3px 3px 0 0 rgba(36, 23, 18, 0.28);
+    inset 0 0 0 3px var(--ha-paper-white),
+    -3px 3px 0 0 rgba(45, 53, 58, 0.2);
 }
 
 .paper-og-img {
@@ -462,10 +475,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #e7d9b6;
+  background-color: var(--ha-paper-shade);
   background-image:
-    linear-gradient(45deg, rgba(36, 23, 18, 0.16) 25%, transparent 25%, transparent 75%, rgba(36, 23, 18, 0.16) 75%),
-    linear-gradient(45deg, rgba(36, 23, 18, 0.16) 25%, transparent 25%, transparent 75%, rgba(36, 23, 18, 0.16) 75%);
+    linear-gradient(45deg, rgba(0, 100, 148, 0.12) 25%, transparent 25%, transparent 75%, rgba(0, 100, 148, 0.12) 75%),
+    linear-gradient(45deg, rgba(0, 100, 148, 0.12) 25%, transparent 25%, transparent 75%, rgba(0, 100, 148, 0.12) 75%);
   background-size: 10px 10px, 10px 10px;
   background-position: 0 0, 5px 5px;
   animation: dither-shift 900ms steps(2, end) infinite;
@@ -478,8 +491,8 @@ body {
   right: 0;
   top: 0;
   height: 3px;
-  background: var(--paper-ink);
-  opacity: 0.5;
+  background: var(--ha-primary);
+  opacity: 0.65;
   animation: dither-scan 1400ms steps(12, end) infinite;
 }
 
@@ -492,9 +505,9 @@ body {
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 0;
-  color: var(--parchment);
-  background: var(--paper-ink);
-  box-shadow: -3px 3px 0 0 rgba(36, 23, 18, 0.35);
+  color: var(--ha-paper-white);
+  background: var(--ha-paper-ink);
+  box-shadow: -3px 3px 0 0 rgba(45, 53, 58, 0.28);
 }
 
 .paper-og-loading.is-error {
@@ -502,7 +515,7 @@ body {
 }
 
 .paper-og-loading.is-error .paper-og-loading__label {
-  background: #7a1f1f;
+  background: #9e2a3b;
 }
 
 .paper-open-badge {
@@ -517,12 +530,14 @@ body {
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: 0;
-  color: var(--paper-ink);
-  background: var(--parchment);
-  border: 2px solid var(--paper-ink);
+  color: var(--ha-paper-ink);
+  background: var(--ha-paper-white);
+  border: 2px solid var(--ha-paper-ink);
   border-radius: 0;
-  box-shadow: -2px 2px 0 0 var(--paper-ink);
-  transition: background-color 90ms steps(2, end);
+  box-shadow: -2px 2px 0 0 var(--ha-paper-ink);
+  transition:
+    background-color 90ms steps(2, end),
+    color 90ms steps(2, end);
 }
 
 /* Meta row */
@@ -544,14 +559,15 @@ body {
   width: 16px;
   height: 16px;
   image-rendering: pixelated;
-  background: rgba(36, 23, 18, 0.12);
-  box-shadow: 0 0 0 2px rgba(36, 23, 18, 0.22);
+  background: var(--ha-paper-border);
+  box-shadow: 0 0 0 2px rgba(45, 53, 58, 0.2);
 }
 
 .paper-site {
   min-width: 0;
   overflow: hidden;
   font-weight: 700;
+  color: var(--ha-primary-deep);
   unicode-bidi: plaintext;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -562,12 +578,12 @@ body {
   overflow: hidden;
   direction: ltr;
   unicode-bidi: isolate;
-  color: var(--paper-ink-soft);
+  color: var(--ha-paper-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Title + description (unicode-bidi: plaintext keeps Arabic RTL and English titles natural) */
+/* Title + description */
 .paper-title {
   margin: 0 0 6px;
   font-family: var(--font-pixel-ar);
@@ -577,13 +593,14 @@ body {
   line-height: 1.3;
   letter-spacing: 0;
   unicode-bidi: plaintext;
-  color: var(--paper-ink);
+  color: var(--ha-paper-heading);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   line-clamp: 3;
   overflow: hidden;
   overflow-wrap: anywhere;
+  transition: color 90ms steps(2, end);
 }
 
 .paper-desc {
@@ -595,7 +612,7 @@ body {
   line-height: 1.4;
   letter-spacing: 0;
   unicode-bidi: plaintext;
-  color: var(--paper-ink-soft);
+  color: var(--ha-paper-muted);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -613,12 +630,12 @@ body {
   font-weight: 600;
   line-height: 1.4;
   letter-spacing: 0;
-  color: rgba(36, 23, 18, 0.58);
-  border-top: 3px solid rgba(36, 23, 18, 0.15);
+  color: var(--ha-primary-deep);
+  border-top: 3px solid var(--ha-paper-border);
 }
 
 /* --------------------------------------------------------------------------
-   7. Action footer (outside the <a>, so buttons never open the link)
+   7. Action footer (exact hadealahmad.com button palette: #006494 -> #0582CA)
    -------------------------------------------------------------------------- */
 
 .paper-actions {
@@ -629,8 +646,8 @@ body {
   gap: 8px;
   flex: 0 0 auto;
   padding: 10px 14px 14px;
-  border-top: 3px solid rgba(36, 23, 18, 0.18);
-  background: rgba(255, 255, 255, 0.24);
+  border-top: 3px solid var(--ha-paper-border);
+  background: var(--ha-paper-shade);
 }
 
 .paper-btn {
@@ -640,28 +657,26 @@ body {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: 0;
-  border-color: var(--paper-ink);
+  border-color: var(--ha-paper-ink);
   box-shadow:
-    inset -3px -3px 0 0 rgba(0, 0, 0, 0.28),
-    inset 3px 3px 0 0 rgba(255, 255, 255, 0.24),
-    0 4px 0 0 var(--paper-ink);
-  color: var(--paper-ink);
+    inset -3px -3px 0 0 rgba(0, 0, 0, 0.24),
+    inset 3px 3px 0 0 rgba(255, 255, 255, 0.22),
+    0 4px 0 0 var(--ha-paper-ink);
 }
 
 .paper-btn:active {
   box-shadow:
     inset 3px 3px 0 0 rgba(0, 0, 0, 0.22),
-    0 2px 0 0 var(--paper-ink);
+    0 2px 0 0 var(--ha-paper-ink);
 }
 
 .paper-btn--draw {
-  background: var(--card-accent);
-  color: #1a1109;
+  background: var(--ha-primary-deep);
+  color: #ffffff;
 }
 
 .paper-btn--draw:hover {
-  background: var(--card-accent);
-  filter: brightness(1.08);
+  background: var(--ha-primary);
 }
 
 .paper-btn--draw[disabled] {
@@ -671,12 +686,12 @@ body {
 }
 
 .paper-btn--back {
-  background: #efe2c2;
-  color: var(--paper-ink);
+  background: var(--ha-paper-border);
+  color: var(--ha-paper-ink);
 }
 
 .paper-btn--back:hover {
-  background: #f7ecd2;
+  background: var(--ha-paper-white);
 }
 
 /* --------------------------------------------------------------------------
@@ -698,11 +713,11 @@ body {
   line-height: 1.4;
   letter-spacing: 0;
   text-align: center;
-  color: var(--ink);
-  background: #241712;
-  border: 3px solid var(--edge-ink);
+  color: var(--ha-paper-bg);
+  background: var(--ha-dark-card);
+  border: 3px solid var(--ha-dark-deep);
   box-shadow:
-    0 0 0 3px var(--gold-deep),
+    0 0 0 3px var(--ha-primary),
     0 5px 0 0 rgba(0, 0, 0, 0.45);
   transform: translate(-50%, 8px);
   opacity: 0;

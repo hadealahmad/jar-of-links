@@ -404,7 +404,7 @@ export class JarMesh {
     // Thin crease line at the shared hinge.
     const crease = new THREE.Mesh(
       new THREE.BoxGeometry(HERO_LEAF_W, 0.012, 0.008),
-      new THREE.MeshLambertMaterial({ color: 0x8a6a4a, flatShading: true }),
+      new THREE.MeshLambertMaterial({ color: 0x8fa3ad, flatShading: true }),
     );
     crease.position.z = 0.002;
     this.heroPaperGroup.add(crease);

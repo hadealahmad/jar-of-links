@@ -185,7 +185,7 @@ describe('resolveLinkPreview', () => {
     expect(preview.favicon).toBe('https://www.google.com/s2/favicons?domain=youtube.com&sz=64');
     expect(preview.jarId).toBe('youtube');
     expect(preview.jarLabel).toBe('يوتيوب');
-    expect(preview.accentColor).toBe('#ff4d6d');
+    expect(preview.accentColor).toBe('#e05263');
     expect(requested).toContain('youtube.com/oembed');
   });
 
