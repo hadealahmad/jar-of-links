@@ -1,5 +1,5 @@
 import type { LinkEntry, LinkType } from '../types';
-import { extractYouTubeId } from './ogResolver';
+import { isYouTubeUrl } from './ogResolver';
 
 type FieldName = 'url' | 'type';
 
@@ -81,7 +81,7 @@ export function parseExplicitLinkType(raw: string | undefined): LinkType | null 
 export function normalizeLinkType(raw: string | undefined, url?: string): LinkType {
   const explicit = parseExplicitLinkType(raw);
   if (explicit) return explicit;
-  if (url && extractYouTubeId(url)) return 'youtube';
+  if (url && isYouTubeUrl(url)) return 'youtube';
   return 'others';
 }
 

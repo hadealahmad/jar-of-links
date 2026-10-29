@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { JAR_BY_ID } from '../../config/jars';
 import { normalizeLinkType, parseLinksCsv } from '../csvParser';
 import { computeJarFillRatios, JarStore, MAX_CATEGORY_FILL_RATIO } from '../jarStore';
-import { extractYouTubeId, resolveLinkPreview } from '../ogResolver';
+import { extractYouTubeId, isYouTubeUrl, resolveLinkPreview } from '../ogResolver';
 
 const realFetch = globalThis.fetch;
 
@@ -141,9 +141,68 @@ describe('extractYouTubeId', () => {
     expect(extractYouTubeId('not a url')).toBeNull();
     expect(extractYouTubeId('')).toBeNull();
   });
+
+  test('isYouTubeUrl recognizes videos, playlists, and @handle channels', () => {
+    expect(isYouTubeUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe(true);
+    expect(
+      isYouTubeUrl('https://www.youtube.com/playlist?list=PLPnjato8iGXLQbppBPhOny8XLSRl7S5pM'),
+    ).toBe(true);
+    expect(isYouTubeUrl('https://www.youtube.com/@LEMMiNO')).toBe(true);
+    expect(isYouTubeUrl('https://www.youtube.com/channel/UCRcgy6GzDeccI7dkbbBna3Q')).toBe(true);
+    expect(isYouTubeUrl('https://www.goodreads.com/book/show/17803.After_Dark')).toBe(false);
+    expect(normalizeLinkType('', 'https://www.youtube.com/@LEMMiNO')).toBe('youtube');
+  });
 });
 
 describe('resolveLinkPreview', () => {
+  test('resolves YouTube playlists via oEmbed and Goodreads books via Apple Books search', async () => {
+    stubFetch((input) => {
+      const url = String(input);
+      if (url.includes('youtube.com/oembed')) {
+        return jsonResponse({
+          title: 'Interface',
+          author_name: 'u m a m i',
+          thumbnail_url: 'https://i.ytimg.com/vi/EHqsCmfTDmI/hqdefault.jpg',
+        });
+      }
+      if (url.includes('itunes.apple.com/search')) {
+        return jsonResponse({
+          results: [
+            {
+              trackName: 'After Dark',
+              artistName: 'Haruki Murakami',
+              description: '<b>Late night</b> encounters in Tokyo.',
+              artworkUrl100: 'https://example.com/cover/100x100bb.jpg',
+            },
+          ],
+        });
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    const playlistPreview = await resolveLinkPreview(
+      {
+        url: 'https://www.youtube.com/playlist?list=PLPnjato8iGXLQbppBPhOny8XLSRl7S5pM',
+        type: 'youtube',
+      },
+      JAR_BY_ID.youtube,
+    );
+    expect(playlistPreview.title).toBe('Interface');
+    expect(playlistPreview.description).toContain('u m a m i');
+    expect(playlistPreview.image).toBe('https://i.ytimg.com/vi/EHqsCmfTDmI/hqdefault.jpg');
+
+    const bookPreview = await resolveLinkPreview(
+      {
+        url: 'https://www.goodreads.com/book/show/17803.After_Dark',
+        type: 'recommendations',
+      },
+      JAR_BY_ID.recommendations,
+    );
+    expect(bookPreview.title).toBe('After Dark');
+    expect(bookPreview.description).toContain('Haruki Murakami');
+    expect(bookPreview.description).toContain('Late night encounters in Tokyo.');
+    expect(bookPreview.image).toBe('https://example.com/cover/600x600bb.jpg');
+  });
   test('uses the YouTube fast path (thumbnail + oEmbed title/author)', async () => {
     let requested = '';
     stubFetch((input) => {

@@ -3,7 +3,7 @@ import type { JarConfig, LinkEntry, ResolvedLinkPreview } from '../types';
 const YOUTUBE_OEMBED_TIMEOUT_MS = 3000;
 const PROVIDER_TIMEOUT_MS = 3500;
 const MICROLINK_TIMEOUT_MS = 3500;
-const OG_CACHE_PREFIX = 'jar_og_v3:';
+const OG_CACHE_PREFIX = 'jar_og_v4:';
 
 interface OgCacheEntry {
   title?: string;
@@ -18,13 +18,13 @@ const HTML_ENTITIES: Record<string, string> = {
   quot: '"',
   apos: "'",
   nbsp: ' ',
-  ndash: '–',
-  mdash: '—',
-  hellip: '…',
-  rsquo: '’',
-  lsquo: '‘',
-  ldquo: '“',
-  rdquo: '”',
+  ndash: '\u2013',
+  mdash: '\u2014',
+  hellip: '\u2026',
+  rsquo: '\u2019',
+  lsquo: '\u2018',
+  ldquo: '\u201c',
+  rdquo: '\u201d',
 };
 
 function stripHtmlAndEntities(raw: string | undefined): string | undefined {
@@ -46,17 +46,33 @@ function stripHtmlAndEntities(raw: string | undefined): string | undefined {
   return decoded || undefined;
 }
 
-/** Extract an 11-character YouTube video id from common URL shapes. */
-export function extractYouTubeId(rawUrl: string): string | null {
+function parseHttpUrl(rawUrl: string): URL | null {
   if (!rawUrl) return null;
-
-  let parsed: URL;
   try {
     const trimmed = rawUrl.trim();
-    parsed = new URL(/^www\./i.test(trimmed) ? `https://${trimmed}` : trimmed);
+    const parsed = new URL(/^www\./i.test(trimmed) ? `https://${trimmed}` : trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed;
   } catch {
     return null;
   }
+}
+
+function isYouTubeHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^www\./, '');
+  return (
+    host === 'youtu.be' ||
+    host === 'youtube.com' ||
+    host === 'm.youtube.com' ||
+    host === 'music.youtube.com' ||
+    host === 'youtube-nocookie.com'
+  );
+}
+
+/** Extract an 11-character YouTube video id from common URL shapes. */
+export function extractYouTubeId(rawUrl: string): string | null {
+  const parsed = parseHttpUrl(rawUrl);
+  if (!parsed || !isYouTubeHost(parsed.hostname)) return null;
 
   const hostname = parsed.hostname.toLowerCase().replace(/^www\./, '');
   const segments = parsed.pathname.split('/').filter(Boolean);
@@ -64,12 +80,7 @@ export function extractYouTubeId(rawUrl: string): string | null {
 
   if (hostname === 'youtu.be') {
     candidate = segments[0];
-  } else if (
-    hostname === 'youtube.com' ||
-    hostname === 'm.youtube.com' ||
-    hostname === 'music.youtube.com' ||
-    hostname === 'youtube-nocookie.com'
-  ) {
+  } else {
     if (parsed.pathname === '/watch' || parsed.pathname.startsWith('/watch/')) {
       candidate = parsed.searchParams.get('v');
     }
@@ -81,6 +92,77 @@ export function extractYouTubeId(rawUrl: string): string | null {
 
   if (!candidate) return null;
   return /^[A-Za-z0-9_-]{11}$/.test(candidate) ? candidate : null;
+}
+
+function extractYouTubePlaylistId(parsed: URL | null): string | null {
+  if (!parsed || !isYouTubeHost(parsed.hostname)) return null;
+  if (parsed.pathname !== '/playlist' && !parsed.pathname.startsWith('/playlist/')) return null;
+  const listId = parsed.searchParams.get('list')?.trim();
+  return listId && /^[A-Za-z0-9_-]{6,}$/.test(listId) ? listId : null;
+}
+
+function extractYouTubeChannel(
+  parsed: URL | null,
+): { handle?: string; channelSlug: string } | null {
+  if (!parsed || !isYouTubeHost(parsed.hostname)) return null;
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  if (host === 'youtu.be') return null;
+
+  const segments = parsed.pathname.split('/').filter(Boolean);
+  if (segments.length === 0) return null;
+
+  const first = segments[0];
+  if (first.startsWith('@') && first.length > 1) {
+    const handle = decodeURIComponent(first.slice(1));
+    return { handle, channelSlug: handle };
+  }
+
+  if ((first === 'channel' || first === 'c' || first === 'user') && segments[1]) {
+    const slug = decodeURIComponent(segments[1]);
+    return { handle: first === 'channel' ? undefined : slug, channelSlug: slug };
+  }
+
+  return null;
+}
+
+/** Return true when `rawUrl` points to a YouTube video, playlist, or channel. */
+export function isYouTubeUrl(rawUrl: string): boolean {
+  if (extractYouTubeId(rawUrl)) return true;
+  const parsed = parseHttpUrl(rawUrl);
+  return Boolean(extractYouTubePlaylistId(parsed) || extractYouTubeChannel(parsed));
+}
+
+function extractGoodreadsBook(
+  parsed: URL | null,
+): { bookId: string; slugTitle?: string } | null {
+  if (!parsed) return null;
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  if (host !== 'goodreads.com' && !host.endsWith('.goodreads.com')) return null;
+
+  const match = parsed.pathname.match(/^\/book\/show\/(\d+)(?:[._-]+([^/?#]+))?/i);
+  if (!match) return null;
+
+  const bookId = match[1];
+  const rawSlug = match[2];
+  let slugTitle: string | undefined;
+
+  if (rawSlug) {
+    let decoded = rawSlug;
+    try {
+      decoded = decodeURIComponent(rawSlug);
+    } catch {
+      // keep raw
+    }
+    const cleaned = decoded
+      .replace(/[-_+]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (cleaned) {
+      slugTitle = cleaned.replace(/\b[a-z]/gi, (c) => c.toUpperCase());
+    }
+  }
+
+  return { bookId, slugTitle };
 }
 
 function extractSteamApp(parsed: URL | null): { appId: string; slugTitle?: string } | null {
@@ -104,9 +186,9 @@ function extractSteamApp(parsed: URL | null): { appId: string; slugTitle?: strin
     }
     slugTitle = decoded
       .replace(/^NieRAutomata$/i, 'NieR:Automata')
-      .replace(/__/g, ' — ')
+      .replace(/__/g, ' \u2014 ')
       .replace(/_+/g, ' ')
-      .replace(/([a-z]{2,})([A-Z])/g, '$1 $2')
+      .replace(/([a-z]{2,})([A-Z][a-z])/g, '$1 $2')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -210,7 +292,9 @@ async function fetchJsonWithTimeout(
   }
 }
 
-async function fetchYouTubeOEmbed(entryUrl: string): Promise<{ title?: string; author?: string }> {
+async function fetchYouTubeOEmbed(
+  entryUrl: string,
+): Promise<{ title?: string; author?: string; thumbnail?: string }> {
   const endpoint = `https://www.youtube.com/oembed?url=${encodeURIComponent(entryUrl)}&format=json`;
   const json = await fetchJsonWithTimeout(endpoint, YOUTUBE_OEMBED_TIMEOUT_MS);
   if (!json || typeof json !== 'object') return {};
@@ -219,7 +303,115 @@ async function fetchYouTubeOEmbed(entryUrl: string): Promise<{ title?: string; a
   return {
     title: asString(data.title),
     author: asString(data.author_name),
+    thumbnail: asString(data.thumbnail_url),
   };
+}
+
+async function fetchUnavatarYouTube(handleOrSlug: string): Promise<string | undefined> {
+  const clean = handleOrSlug.replace(/^@/, '').trim();
+  if (!clean) return undefined;
+  const endpoint = `https://unavatar.io/youtube/${encodeURIComponent(clean)}?json`;
+  const json = await fetchJsonWithTimeout(endpoint, PROVIDER_TIMEOUT_MS);
+  if (!json || typeof json !== 'object') return undefined;
+  return asString((json as Record<string, unknown>).url);
+}
+
+async function fetchWikidataYouTubeChannel(
+  handle: string,
+): Promise<{ title?: string; description?: string }> {
+  const clean = handle.replace(/^@/, '').trim();
+  if (!clean || !/^[A-Za-z0-9._-]+$/.test(clean)) return {};
+
+  const sparql = `SELECT ?itemLabel ?itemDescription WHERE { ?item wdt:P11245 ?h . FILTER(LCASE(STR(?h)) = "${clean.toLowerCase()}") SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } LIMIT 1`;
+  const sparqlUrl = `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`;
+  const sparqlJson = await fetchJsonWithTimeout(sparqlUrl, PROVIDER_TIMEOUT_MS);
+
+  if (sparqlJson && typeof sparqlJson === 'object') {
+    const bindings = (
+      sparqlJson as { results?: { bindings?: Array<Record<string, { value?: string }>> } }
+    ).results?.bindings;
+    const first = bindings?.[0];
+    const label = asString(first?.itemLabel?.value);
+    const desc = asString(first?.itemDescription?.value);
+    if (label && !/^Q\d+$/.test(label)) {
+      return { title: label, description: desc };
+    }
+  }
+
+  const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(clean)}&language=en&limit=2&format=json&origin=*`;
+  const searchJson = await fetchJsonWithTimeout(searchUrl, PROVIDER_TIMEOUT_MS);
+  if (searchJson && typeof searchJson === 'object') {
+    const results = (searchJson as { search?: Array<Record<string, unknown>> }).search ?? [];
+    const match = results.find(
+      (item) => asString(item.label)?.toLowerCase() === clean.toLowerCase(),
+    );
+    if (match) {
+      return {
+        title: asString(match.label),
+        description: asString(match.description),
+      };
+    }
+  }
+
+  return {};
+}
+
+async function fetchYouTubeChannelMetadata(channel: {
+  handle?: string;
+  channelSlug: string;
+}): Promise<OgCacheEntry> {
+  const lookupKey = channel.handle ?? channel.channelSlug;
+  const [avatar, wikidata] = await Promise.all([
+    fetchUnavatarYouTube(lookupKey),
+    channel.handle
+      ? fetchWikidataYouTubeChannel(channel.handle)
+      : Promise.resolve<{ title?: string; description?: string }>({}),
+  ]);
+
+  const title = wikidata.title ?? channel.handle ?? channel.channelSlug;
+  const description = wikidata.description
+    ? `\u0642\u0646\u0627\u0629 \u064a\u0648\u062a\u064a\u0648\u0628 (@${lookupKey}) \u2014 ${wikidata.description}`
+    : `\u0642\u0646\u0627\u0629 \u0639\u0644\u0649 \u064a\u0648\u062a\u064a\u0648\u0628 (@${lookupKey})`;
+
+  return {
+    title,
+    description,
+    image: avatar,
+  };
+}
+
+async function fetchBookMetadataByTitle(slugTitle: string): Promise<OgCacheEntry | null> {
+  const endpoint = `https://itunes.apple.com/search?media=ebook&term=${encodeURIComponent(slugTitle)}&limit=5`;
+  const json = await fetchJsonWithTimeout(endpoint, PROVIDER_TIMEOUT_MS);
+  if (!json || typeof json !== 'object') return null;
+
+  const results = Array.isArray((json as { results?: unknown }).results)
+    ? ((json as { results: Array<Record<string, unknown>> }).results ?? [])
+    : [];
+  if (results.length === 0) return null;
+
+  const targetLower = slugTitle.toLowerCase();
+  const chosen =
+    results.find((item) => asString(item.trackName)?.toLowerCase() === targetLower) ??
+    results.find((item) => asString(item.trackName)?.toLowerCase().startsWith(targetLower)) ??
+    results[0];
+
+  const title = asString(chosen.trackName) ?? slugTitle;
+  const author = asString(chosen.artistName);
+  const synopsis = stripHtmlAndEntities(asString(chosen.description));
+  const rawArtwork = asString(chosen.artworkUrl100);
+  const image = rawArtwork ? rawArtwork.replace(/\/\d+x\d+bb\./, '/600x600bb.') : undefined;
+
+  let description: string | undefined;
+  if (author && synopsis) {
+    description = `\u0643\u062a\u0627\u0628 \u0628\u0648\u0627\u0633\u0637\u0629 ${author} \u2014 ${synopsis}`;
+  } else if (author) {
+    description = `\u0643\u062a\u0627\u0628 \u0628\u0648\u0627\u0633\u0637\u0629 ${author}`;
+  } else {
+    description = synopsis;
+  }
+
+  return { title, description, image };
 }
 
 async function fetchAniListMetadata(
@@ -323,7 +515,12 @@ function deriveFallbackTitle(parsed: URL | null, hostname: string, rawUrl: strin
     // Keep the raw segment when it contains malformed escapes.
   }
 
+  if (slug.startsWith('@') && slug.length > 1) {
+    return slug.slice(1);
+  }
+
   slug = slug
+    .replace(/^\d+[._-]+/, '')
     .replace(/\.[a-z0-9]{1,5}$/i, '')
     .replace(/[-_+]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -339,22 +536,17 @@ function deriveFallbackTitle(parsed: URL | null, hostname: string, rawUrl: strin
 /**
  * Resolve Open Graph metadata (`title`, `description`, `image`) directly from the link URL.
  *
- * Uses native CORS-enabled provider endpoints first (YouTube oEmbed, Steam CDN,
- * AniList GraphQL, Wikipedia REST, hadealahmad.com WordPress REST), then falls
- * back to the Microlink OG API (cached in `sessionStorage`), and finally to a
- * clean URL-derived title and procedural pixel banner when offline or rate-limited.
+ * Uses native CORS-enabled provider endpoints first (YouTube oEmbed for videos & playlists,
+ * Unavatar + Wikidata for YouTube channels, Apple Books for Goodreads titles, Steam CDN,
+ * AniList GraphQL, Wikipedia REST, hadealahmad.com WordPress REST), then falls back to
+ * the Microlink OG API (cached in `sessionStorage`), and finally to a clean URL-derived
+ * title and procedural pixel banner when offline or rate-limited.
  */
 export async function resolveLinkPreview(
   entry: LinkEntry,
   jarConfig: JarConfig,
 ): Promise<ResolvedLinkPreview> {
-  let parsed: URL | null = null;
-  try {
-    const trimmed = entry.url.trim();
-    parsed = new URL(/^www\./i.test(trimmed) ? `https://${trimmed}` : trimmed);
-  } catch {
-    parsed = null;
-  }
+  const parsed = parseHttpUrl(entry.url);
 
   const hostname = parsed
     ? parsed.hostname.replace(/^www\./i, '')
@@ -377,14 +569,75 @@ export async function resolveLinkPreview(
     if (!title) {
       const oembed = await fetchYouTubeOEmbed(entry.url);
       if (oembed.title) title = oembed.title;
-      if (!description && oembed.author) description = `مقطع بواسطة ${oembed.author}`;
+      if (!description && oembed.author) {
+        description = `\u0645\u0642\u0637\u0639 \u0628\u0648\u0627\u0633\u0637\u0629 ${oembed.author}`;
+      }
+      if (!image && oembed.thumbnail) image = oembed.thumbnail;
       if (title) {
         writeSessionCache(cacheKey, { title, description: description || undefined, image });
       }
     }
   }
 
-  const steamApp = !youtubeId ? extractSteamApp(parsed) : null;
+  const youtubePlaylistId = !youtubeId ? extractYouTubePlaylistId(parsed) : null;
+  if (youtubePlaylistId) {
+    skipMicrolink = true;
+    if (!title || !image) {
+      const oembed = await fetchYouTubeOEmbed(entry.url);
+      if (!title && oembed.title) title = oembed.title;
+      if (!description && oembed.author) {
+        description = `\u0633\u0644\u0633\u0644\u0629 \u0639\u0644\u0649 \u064a\u0648\u062a\u064a\u0648\u0628 \u0628\u0648\u0627\u0633\u0637\u0629 ${oembed.author}`;
+      }
+      if (!image && oembed.thumbnail) image = oembed.thumbnail;
+      if (title || image) {
+        writeSessionCache(cacheKey, {
+          title: title || undefined,
+          description: description || undefined,
+          image: image || undefined,
+        });
+      }
+    }
+  }
+
+  const youtubeChannel =
+    !youtubeId && !youtubePlaylistId ? extractYouTubeChannel(parsed) : null;
+  if (youtubeChannel && (!title || !image || !description)) {
+    const resolved = await fetchYouTubeChannelMetadata(youtubeChannel);
+    skipMicrolink = Boolean(resolved.title && resolved.image);
+    if (!title && resolved.title) title = resolved.title;
+    if (!description && resolved.description) description = resolved.description;
+    if (!image && resolved.image) image = resolved.image;
+    if (skipMicrolink) {
+      writeSessionCache(cacheKey, { title, description, image });
+    }
+  }
+
+  const goodreadsBook =
+    !youtubeId && !youtubePlaylistId && !youtubeChannel
+      ? extractGoodreadsBook(parsed)
+      : null;
+  if (goodreadsBook) {
+    if (!title && goodreadsBook.slugTitle) {
+      title = goodreadsBook.slugTitle;
+    }
+    if (goodreadsBook.slugTitle && (!image || !description)) {
+      const resolved = await fetchBookMetadataByTitle(goodreadsBook.slugTitle);
+      if (resolved) {
+        skipMicrolink = Boolean(resolved.image && resolved.description);
+        if (resolved.title) title = resolved.title;
+        if (!description && resolved.description) description = resolved.description;
+        if (!image && resolved.image) image = resolved.image;
+        if (skipMicrolink) {
+          writeSessionCache(cacheKey, { title, description, image });
+        }
+      }
+    }
+  }
+
+  const steamApp =
+    !youtubeId && !youtubePlaylistId && !youtubeChannel && !goodreadsBook
+      ? extractSteamApp(parsed)
+      : null;
   if (steamApp) {
     if (!image) {
       image = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${steamApp.appId}/header.jpg`;
@@ -394,7 +647,10 @@ export async function resolveLinkPreview(
     }
   }
 
-  const aniListMedia = !youtubeId && !steamApp ? extractAniListMedia(parsed) : null;
+  const aniListMedia =
+    !youtubeId && !youtubePlaylistId && !youtubeChannel && !goodreadsBook && !steamApp
+      ? extractAniListMedia(parsed)
+      : null;
   if (aniListMedia && (!title || !image || !description)) {
     const resolved = await fetchAniListMetadata(aniListMedia.mediaType, aniListMedia.id);
     if (resolved) {
@@ -407,7 +663,14 @@ export async function resolveLinkPreview(
   }
 
   const wikiPage =
-    !youtubeId && !steamApp && !aniListMedia ? extractWikipediaPage(parsed) : null;
+    !youtubeId &&
+    !youtubePlaylistId &&
+    !youtubeChannel &&
+    !goodreadsBook &&
+    !steamApp &&
+    !aniListMedia
+      ? extractWikipediaPage(parsed)
+      : null;
   if (wikiPage && (!title || !description)) {
     const resolved = await fetchWikipediaSummary(wikiPage.origin, wikiPage.title);
     if (resolved) {
@@ -420,7 +683,13 @@ export async function resolveLinkPreview(
   }
 
   const wpPost =
-    !youtubeId && !steamApp && !aniListMedia && !wikiPage
+    !youtubeId &&
+    !youtubePlaylistId &&
+    !youtubeChannel &&
+    !goodreadsBook &&
+    !steamApp &&
+    !aniListMedia &&
+    !wikiPage
       ? extractWordPressSlug(parsed)
       : null;
   if (wpPost && (!title || !image || !description)) {
@@ -457,9 +726,15 @@ export async function resolveLinkPreview(
   }
 
   if (!description) {
-    description = steamApp
-      ? 'صفحة اللعبة على متجر Steam — اضغط لفتحها في تبويب جديد.'
-      : `اضغط على هذه الورقة لفتح ${hostname} في تبويب جديد.`;
+    if (steamApp) {
+      description =
+        '\u0635\u0641\u062d\u0629 \u0627\u0644\u0644\u0639\u0628\u0629 \u0639\u0644\u0649 \u0645\u062a\u062c\u0631 Steam \u2014 \u0627\u0636\u063a\u0637 \u0644\u0641\u062a\u062d\u0647\u0627 \u0641\u064a \u062a\u0628\u0648\u064a\u0628 \u062c\u062f\u064a\u062f.';
+    } else if (goodreadsBook) {
+      description =
+        '\u0635\u0641\u062d\u0629 \u0627\u0644\u0643\u062a\u0627\u0628 \u0639\u0644\u0649 Goodreads \u2014 \u0627\u0636\u063a\u0637 \u0644\u0641\u062a\u062d\u0647\u0627 \u0641\u064a \u062a\u0628\u0648\u064a\u0628 \u062c\u062f\u064a\u062f.';
+    } else {
+      description = `\u0627\u0636\u063a\u0637 \u0639\u0644\u0649 \u0647\u0630\u0647 \u0627\u0644\u0648\u0631\u0642\u0629 \u0644\u0641\u062a\u062d ${hostname} \u0641\u064a \u062a\u0628\u0648\u064a\u0628 \u062c\u062f\u064a\u062f.`;
+    }
   }
 
   return {

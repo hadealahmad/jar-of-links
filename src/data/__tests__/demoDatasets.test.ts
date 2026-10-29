@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { CATEGORY_JAR_IDS, JAR_BY_ID, JAR_CONFIGS, LINKS_CSV_PATH } from '../../config/jars';
 import { parseLinksCsv } from '../csvParser';
 import { computeJarFillRatios } from '../jarStore';
-import { extractYouTubeId } from '../ogResolver';
+import { isYouTubeUrl } from '../ogResolver';
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../../../public');
 
@@ -61,12 +61,12 @@ describe('public/data/links.csv unified 2-column dataset', () => {
     }
   });
 
-  test('youtube-typed rows contain valid YouTube video IDs', () => {
+  test('youtube-typed rows contain valid YouTube video, playlist, or channel URLs', () => {
     const raw = readFileSync(resolve(PUBLIC_DIR, 'data/links.csv'), 'utf-8');
     const youtubeEntries = parseLinksCsv(raw).filter((e) => e.type === 'youtube');
 
     for (const entry of youtubeEntries) {
-      expect(extractYouTubeId(entry.url)).not.toBeNull();
+      expect(isYouTubeUrl(entry.url)).toBe(true);
     }
   });
 });
