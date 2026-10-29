@@ -2,10 +2,10 @@
 
 A retro pixel-art **Three.js** web experience (Arabic RTL UI, styled after `hadealahmad.com`) featuring five closed glass jars filled with folded paper link notes:
 - **الكل (`all`)** — Larger center jar picking across **every** row in `public/data/links.csv` (always visually full)
-- **يوتيوب (`youtube`)** — Videos, talks & creative coding (`type = youtube`)
-- **مقالات (`articles`)** — Essays, tutorials & deep dives (`type = articles`)
-- **توصيات (`recommendations`)** — Hand-picked tools, indie gems & favorites (`type = recommendations`)
-- **أخرى (`others`)** — Internet curiosities, web toys & archives (`type = others`)
+- **مرئيات (`watch`)** — YouTube videos, channels, playlists, anime & animated series (`type = watch`)
+- **ألعاب (`games`)** — Steam & video games (`type = games`)
+- **كتب (`books`)** — Books & novels on Goodreads (`type = books`)
+- **مقالات (`articles`)** — Essays, blog posts & deep-dive reading (`type = articles`)
 
 The visual number and stack height of folded paper cards inside each 3D jar dynamically reflect that jar's item count relative to the other jars, while **الكل (`all`)** always remains the fullest jar on the shelf.
 
@@ -40,20 +40,20 @@ All five jars read from a **single** two-column static CSV file at [`public/data
 
 ```csv
 url,type
-https://www.youtube.com/watch?v=f4s1h2YETNY,youtube
-https://ciechanow.ski/mechanical-watch/,articles
-https://excalidraw.com/,recommendations
-https://neal.fun/,others
+https://www.youtube.com/@LEMMiNO,watch
+https://store.steampowered.com/app/632470/Disco_Elysium__The_Final_Cut/,games
+https://www.goodreads.com/book/show/17803.After_Dark,books
+https://hadealahmad.com/2021/08/the-internet-makes-you-stupid/,articles
 ```
 
 | `type` Value | Target Jar | Included in `الكل` (`all`)? |
 | :--- | :--- | :---: |
-| `youtube` | **يوتيوب** | Yes |
+| `watch` | **مرئيات** | Yes |
+| `games` | **ألعاب** | Yes |
+| `books` | **كتب** | Yes |
 | `articles` | **مقالات** | Yes |
-| `recommendations` | **توصيات** | Yes |
-| `others` | **أخرى** | Yes |
 
-At runtime, the client automatically resolves YouTube thumbnails and titles via oEmbed, fetches Open Graph metadata (`title`, `description`, `image`) via CORS metadata API (cached per session), and generates a retro pixel-art banner fallback if a site has no `og:image`. (If `type` is left blank, YouTube URLs default to `youtube` and other URLs default to `others`.)
+At runtime, the client automatically resolves metadata (`title`, `description`, `image`) via native CORS-enabled provider endpoints (YouTube oEmbed, Unavatar + Wikidata, Apple Books, Steam CDN, AniList GraphQL, Wikipedia REST, WordPress REST) with Microlink OG fallback and a procedural pixel-art banner fallback. (If `type` is left blank, the parser automatically infers `watch`, `games`, `books`, or `articles` from the URL domain.)
 
 ---
 
@@ -61,11 +61,10 @@ At runtime, the client automatically resolves YouTube thumbnails and titles via 
 
 Vite is configured with `base: './'`, so the compiled static site works identically under both `https://hadealahmad.github.io/jar-of-links/` and `https://jar.hadealahmad.com/`.
 
-When you are ready to replace the demo CSV and go live:
-1. Replace the demo rows in `public/data/links.csv` with your own `url,type` entries.
-2. Switch the repository visibility from **Private** to **Public** in GitHub Settings (or keep private on GitHub Pro/Enterprise).
-3. In **Settings → Pages**, set **Build and deployment → Source** to **GitHub Actions** (uses [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml)).
-4. To connect `jar.hadealahmad.com`:
+When you are ready to go live:
+1. Switch the repository visibility from **Private** to **Public** in GitHub Settings (or keep private on GitHub Pro/Enterprise).
+2. In **Settings → Pages**, set **Build and deployment → Source** to **GitHub Actions** (uses [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml)).
+3. To connect `jar.hadealahmad.com`:
    - Create `public/CNAME` containing:
      ```text
      jar.hadealahmad.com

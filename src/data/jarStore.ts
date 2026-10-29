@@ -18,37 +18,35 @@ export function computeJarFillRatios(
   counts: Partial<Record<JarId, number>>,
 ): Record<JarId, number> {
   const categoryCounts: Record<LinkType, number> = {
-    youtube: Math.max(0, counts.youtube ?? 0),
+    watch: Math.max(0, counts.watch ?? 0),
+    games: Math.max(0, counts.games ?? 0),
+    books: Math.max(0, counts.books ?? 0),
     articles: Math.max(0, counts.articles ?? 0),
-    recommendations: Math.max(0, counts.recommendations ?? 0),
-    others: Math.max(0, counts.others ?? 0),
   };
 
   const sumCategories =
-    categoryCounts.youtube +
-    categoryCounts.articles +
-    categoryCounts.recommendations +
-    categoryCounts.others;
+    categoryCounts.watch +
+    categoryCounts.games +
+    categoryCounts.books +
+    categoryCounts.articles;
   const allCount = Math.max(0, counts.all ?? sumCategories);
   const maxCategory = Math.max(
-    categoryCounts.youtube,
+    categoryCounts.watch,
+    categoryCounts.games,
+    categoryCounts.books,
     categoryCounts.articles,
-    categoryCounts.recommendations,
-    categoryCounts.others,
   );
 
   return {
     all: allCount > 0 ? 1 : 0,
-    youtube:
-      maxCategory > 0 ? (categoryCounts.youtube / maxCategory) * MAX_CATEGORY_FILL_RATIO : 0,
+    watch:
+      maxCategory > 0 ? (categoryCounts.watch / maxCategory) * MAX_CATEGORY_FILL_RATIO : 0,
+    games:
+      maxCategory > 0 ? (categoryCounts.games / maxCategory) * MAX_CATEGORY_FILL_RATIO : 0,
+    books:
+      maxCategory > 0 ? (categoryCounts.books / maxCategory) * MAX_CATEGORY_FILL_RATIO : 0,
     articles:
       maxCategory > 0 ? (categoryCounts.articles / maxCategory) * MAX_CATEGORY_FILL_RATIO : 0,
-    recommendations:
-      maxCategory > 0
-        ? (categoryCounts.recommendations / maxCategory) * MAX_CATEGORY_FILL_RATIO
-        : 0,
-    others:
-      maxCategory > 0 ? (categoryCounts.others / maxCategory) * MAX_CATEGORY_FILL_RATIO : 0,
   };
 }
 
@@ -95,22 +93,21 @@ export class JarStore {
     try {
       await this.ensureLoaded();
     } catch {
-      const zeroCounts: Record<JarId, number> = {
-        youtube: 0,
-        articles: 0,
+      return {
+        watch: 0,
+        games: 0,
         all: 0,
-        recommendations: 0,
-        others: 0,
+        books: 0,
+        articles: 0,
       };
-      return zeroCounts;
     }
 
     return {
-      youtube: this.getCount('youtube'),
-      articles: this.getCount('articles'),
+      watch: this.getCount('watch'),
+      games: this.getCount('games'),
       all: this.getCount('all'),
-      recommendations: this.getCount('recommendations'),
-      others: this.getCount('others'),
+      books: this.getCount('books'),
+      articles: this.getCount('articles'),
     };
   }
 
@@ -179,10 +176,10 @@ export class JarStore {
 
     const allEntries = parseLinksCsv(await response.text());
     const byCategory: Record<LinkType, LinkEntry[]> = {
-      youtube: [],
+      watch: [],
+      games: [],
+      books: [],
       articles: [],
-      recommendations: [],
-      others: [],
     };
 
     for (const entry of allEntries) {

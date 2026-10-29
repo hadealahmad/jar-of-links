@@ -31,7 +31,7 @@ describe('parseLinksCsv', () => {
       '\uFEFFurl,type\r\n' +
       'https://example.com/first,articles\r\n' +
       '\r\n' +
-      '"https://example.com/second","recommendations"\r\n';
+      '"https://store.steampowered.com/app/632470/Disco_Elysium/","games"\r\n';
 
     const entries = parseLinksCsv(csv);
 
@@ -41,57 +41,66 @@ describe('parseLinksCsv', () => {
       type: 'articles',
     });
     expect(entries[1]).toEqual({
-      url: 'https://example.com/second',
-      type: 'recommendations',
+      url: 'https://store.steampowered.com/app/632470/Disco_Elysium/',
+      type: 'games',
     });
   });
 
   test('maps columns case-insensitively in any order and normalizes English/Arabic types', () => {
     const csv = [
       'CATEGORY,LINK',
-      'مقالات,https://example.com/post',
-      'recs,https://example.com/tool',
+      '\u0645\u0642\u0627\u0644\u0627\u062a,https://example.com/post',
+      '\u0623\u0644\u0639\u0627\u0628,https://example.com/game',
+      '\u0643\u062a\u0628,https://example.com/book',
+      '\u0645\u0631\u0626\u064a\u0627\u062a,https://example.com/video',
     ].join('\n');
 
     const entries = parseLinksCsv(csv);
 
     expect(entries).toEqual([
       { url: 'https://example.com/post', type: 'articles' },
-      { url: 'https://example.com/tool', type: 'recommendations' },
+      { url: 'https://example.com/game', type: 'games' },
+      { url: 'https://example.com/book', type: 'books' },
+      { url: 'https://example.com/video', type: 'watch' },
     ]);
   });
 
-  test('infers type when omitted (youtube URLs -> youtube, others -> others) and ignores comments/blank lines', () => {
+  test('infers type from URL host when omitted and ignores comments/blank lines', () => {
     const csv = [
       '# My bookmarks',
       'https://youtu.be/dQw4w9WgXcQ',
       '',
-      'www.github.com',
+      'https://store.steampowered.com/app/524220/NieRAutomata/',
+      'https://www.goodreads.com/book/show/17803.After_Dark',
       '   ',
-      'https://news.ycombinator.com/item?id=42,articles',
+      'https://hadealahmad.com/2021/08/the-internet-makes-you-stupid/',
       '# trailing comment, with commas',
     ].join('\n');
 
     const entries = parseLinksCsv(csv);
 
     expect(entries).toEqual([
-      { url: 'https://youtu.be/dQw4w9WgXcQ', type: 'youtube' },
-      { url: 'https://www.github.com/', type: 'others' },
-      { url: 'https://news.ycombinator.com/item?id=42', type: 'articles' },
+      { url: 'https://youtu.be/dQw4w9WgXcQ', type: 'watch' },
+      { url: 'https://store.steampowered.com/app/524220/NieRAutomata/', type: 'games' },
+      { url: 'https://www.goodreads.com/book/show/17803.After_Dark', type: 'books' },
+      { url: 'https://hadealahmad.com/2021/08/the-internet-makes-you-stupid/', type: 'articles' },
     ]);
-    expect(normalizeLinkType('', 'https://www.youtube.com/watch?v=c63KFuxi_IU')).toBe('youtube');
-    expect(normalizeLinkType(undefined, 'https://example.com')).toBe('others');
+    expect(normalizeLinkType('', 'https://www.youtube.com/watch?v=c63KFuxi_IU')).toBe('watch');
+    expect(normalizeLinkType('', 'https://anilist.co/anime/99420/Shoujo-Shuumatsu-Ryokou/')).toBe(
+      'watch',
+    );
+    expect(normalizeLinkType(undefined, 'https://example.com/essay')).toBe('articles');
   });
 
   test('parses headerless url,type and type,url rows', () => {
     const csv = [
-      'https://example.com/a,recommendations',
-      'articles,https://example.com/b',
+      'https://example.com/a,books',
+      'games,https://example.com/b',
     ].join('\n');
 
     expect(parseLinksCsv(csv)).toEqual([
-      { url: 'https://example.com/a', type: 'recommendations' },
-      { url: 'https://example.com/b', type: 'articles' },
+      { url: 'https://example.com/a', type: 'books' },
+      { url: 'https://example.com/b', type: 'games' },
     ]);
   });
 
@@ -99,20 +108,20 @@ describe('parseLinksCsv', () => {
     const csv = [
       'url,type',
       'www.example.com/path,articles',
-      'https://example.com/ok,others',
-      'ftp://example.com/file,others',
-      'mailto:someone@example.com,others',
-      'javascript:alert(1),others',
-      'not a url,others',
-      'example.com/no-scheme,others',
-      ',others',
+      'https://example.com/ok,books',
+      'ftp://example.com/file,articles',
+      'mailto:someone@example.com,articles',
+      'javascript:alert(1),articles',
+      'not a url,articles',
+      'example.com/no-scheme,articles',
+      ',articles',
     ].join('\n');
 
     const entries = parseLinksCsv(csv);
 
     expect(entries).toEqual([
       { url: 'https://www.example.com/path', type: 'articles' },
-      { url: 'https://example.com/ok', type: 'others' },
+      { url: 'https://example.com/ok', type: 'books' },
     ]);
   });
 
@@ -123,10 +132,12 @@ describe('parseLinksCsv', () => {
   });
 });
 
-describe('extractYouTubeId', () => {
+describe('extractYouTubeId & isYouTubeUrl', () => {
   test('extracts ids from watch, youtu.be, shorts, embed and live URLs', () => {
     expect(extractYouTubeId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
-    expect(extractYouTubeId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s')).toBe('dQw4w9WgXcQ');
+    expect(extractYouTubeId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s')).toBe(
+      'dQw4w9WgXcQ',
+    );
     expect(extractYouTubeId('https://youtu.be/dQw4w9WgXcQ?t=43')).toBe('dQw4w9WgXcQ');
     expect(extractYouTubeId('https://youtube.com/shorts/abc123XYZ_-')).toBe('abc123XYZ_-');
     expect(extractYouTubeId('https://www.youtube.com/embed/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
@@ -150,7 +161,7 @@ describe('extractYouTubeId', () => {
     expect(isYouTubeUrl('https://www.youtube.com/@LEMMiNO')).toBe(true);
     expect(isYouTubeUrl('https://www.youtube.com/channel/UCRcgy6GzDeccI7dkbbBna3Q')).toBe(true);
     expect(isYouTubeUrl('https://www.goodreads.com/book/show/17803.After_Dark')).toBe(false);
-    expect(normalizeLinkType('', 'https://www.youtube.com/@LEMMiNO')).toBe('youtube');
+    expect(normalizeLinkType('', 'https://www.youtube.com/@LEMMiNO')).toBe('watch');
   });
 });
 
@@ -183,26 +194,29 @@ describe('resolveLinkPreview', () => {
     const playlistPreview = await resolveLinkPreview(
       {
         url: 'https://www.youtube.com/playlist?list=PLPnjato8iGXLQbppBPhOny8XLSRl7S5pM',
-        type: 'youtube',
+        type: 'watch',
       },
-      JAR_BY_ID.youtube,
+      JAR_BY_ID.watch,
     );
     expect(playlistPreview.title).toBe('Interface');
     expect(playlistPreview.description).toContain('u m a m i');
     expect(playlistPreview.image).toBe('https://i.ytimg.com/vi/EHqsCmfTDmI/hqdefault.jpg');
+    expect(playlistPreview.jarLabel).toBe('\u0645\u0631\u0626\u064a\u0627\u062a');
 
     const bookPreview = await resolveLinkPreview(
       {
         url: 'https://www.goodreads.com/book/show/17803.After_Dark',
-        type: 'recommendations',
+        type: 'books',
       },
-      JAR_BY_ID.recommendations,
+      JAR_BY_ID.books,
     );
     expect(bookPreview.title).toBe('After Dark');
     expect(bookPreview.description).toContain('Haruki Murakami');
     expect(bookPreview.description).toContain('Late night encounters in Tokyo.');
     expect(bookPreview.image).toBe('https://example.com/cover/600x600bb.jpg');
+    expect(bookPreview.jarLabel).toBe('\u0643\u062a\u0628');
   });
+
   test('uses the YouTube fast path (thumbnail + oEmbed title/author)', async () => {
     let requested = '';
     stubFetch((input) => {
@@ -211,17 +225,17 @@ describe('resolveLinkPreview', () => {
     });
 
     const preview = await resolveLinkPreview(
-      { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', type: 'youtube' },
-      JAR_BY_ID.youtube,
+      { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', type: 'watch' },
+      JAR_BY_ID.watch,
     );
 
     expect(preview.title).toBe('Mock Video');
-    expect(preview.description).toBe('مقطع بواسطة Mock Author');
+    expect(preview.description).toBe('\u0645\u0642\u0637\u0639 \u0628\u0648\u0627\u0633\u0637\u0629 Mock Author');
     expect(preview.image).toBe('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
     expect(preview.hostname).toBe('youtube.com');
     expect(preview.favicon).toBe('https://www.google.com/s2/favicons?domain=youtube.com&sz=64');
-    expect(preview.jarId).toBe('youtube');
-    expect(preview.jarLabel).toBe('يوتيوب');
+    expect(preview.jarId).toBe('watch');
+    expect(preview.jarLabel).toBe('\u0645\u0631\u0626\u064a\u0627\u062a');
     expect(preview.accentColor).toBe('#e05263');
     expect(requested).toContain('youtube.com/oembed');
   });
@@ -261,7 +275,9 @@ describe('resolveLinkPreview', () => {
     );
 
     expect(preview.title).toBe('Cool Article');
-    expect(preview.description).toBe('اضغط على هذه الورقة لفتح example.com في تبويب جديد.');
+    expect(preview.description).toBe(
+      '\u0627\u0636\u063a\u0637 \u0639\u0644\u0649 \u0647\u0630\u0647 \u0627\u0644\u0648\u0631\u0642\u0629 \u0644\u0641\u062a\u062d example.com \u0641\u064a \u062a\u0628\u0648\u064a\u0628 \u062c\u062f\u064a\u062f.',
+    );
     expect(preview.image).toBeNull();
     expect(preview.hostname).toBe('example.com');
     expect(preview.favicon).toBe('https://www.google.com/s2/favicons?domain=example.com&sz=64');
@@ -271,12 +287,12 @@ describe('resolveLinkPreview', () => {
 describe('JarStore & computeJarFillRatios', () => {
   const sharedCsv = [
     'url,type',
-    'https://www.youtube.com/watch?v=c63KFuxi_IU,youtube',
-    'https://www.youtube.com/watch?v=Qz0KTGYJtUk,youtube',
-    'https://www.youtube.com/watch?v=WUlgvNe4BLU,youtube',
+    'https://www.youtube.com/watch?v=c63KFuxi_IU,watch',
+    'https://www.youtube.com/watch?v=Qz0KTGYJtUk,watch',
+    'https://www.youtube.com/watch?v=WUlgvNe4BLU,watch',
     'https://example.com/art-1,articles',
     'https://example.com/art-2,articles',
-    'https://example.com/rec-1,recommendations',
+    'https://store.steampowered.com/app/632470/Disco_Elysium/,games',
   ].join('\n');
 
   test('fetches links.csv once across all jars, partitions by type, and populates all with every row', async () => {
@@ -288,24 +304,24 @@ describe('JarStore & computeJarFillRatios', () => {
     });
 
     const store = new JarStore();
-    const [yt, art, all] = await Promise.all([
-      store.loadJar('youtube'),
+    const [watch, art, all] = await Promise.all([
+      store.loadJar('watch'),
       store.loadJar('articles'),
       store.loadJar('all'),
     ]);
 
     expect(calls).toBe(1);
-    expect(yt).toHaveLength(3);
+    expect(watch).toHaveLength(3);
     expect(art).toHaveLength(2);
     expect(all).toHaveLength(6);
-    expect(store.getCount('recommendations')).toBe(1);
-    expect(store.getCount('others')).toBe(0);
+    expect(store.getCount('games')).toBe(1);
+    expect(store.getCount('books')).toBe(0);
     expect(store.getAllCounts()).toEqual({
       all: 6,
-      youtube: 3,
+      watch: 3,
       articles: 2,
-      recommendations: 1,
-      others: 0,
+      games: 1,
+      books: 0,
     });
   });
 
@@ -316,11 +332,11 @@ describe('JarStore & computeJarFillRatios', () => {
     const counts = await store.preloadAll();
 
     expect(counts).toEqual({
-      youtube: 0,
-      articles: 0,
+      watch: 0,
+      games: 0,
       all: 0,
-      recommendations: 0,
-      others: 0,
+      books: 0,
+      articles: 0,
     });
   });
 
@@ -332,12 +348,12 @@ describe('JarStore & computeJarFillRatios', () => {
     });
 
     const store = new JarStore();
-    const ytDraws: string[] = [];
+    const watchDraws: string[] = [];
     for (let i = 0; i < 9; i++) {
-      const entry = await store.drawRandom('youtube');
+      const entry = await store.drawRandom('watch');
       expect(entry).not.toBeNull();
-      expect(entry!.type).toBe('youtube');
-      ytDraws.push(entry!.url);
+      expect(entry!.type).toBe('watch');
+      watchDraws.push(entry!.url);
     }
 
     const allDraws: string[] = [];
@@ -348,11 +364,11 @@ describe('JarStore & computeJarFillRatios', () => {
     }
 
     expect(calls).toBe(1);
-    expect(new Set(ytDraws.slice(0, 3)).size).toBe(3);
-    expect(new Set(ytDraws.slice(3, 6)).size).toBe(3);
-    expect(new Set(ytDraws.slice(6, 9)).size).toBe(3);
-    expect(ytDraws[3]).not.toBe(ytDraws[2]);
-    expect(ytDraws[6]).not.toBe(ytDraws[5]);
+    expect(new Set(watchDraws.slice(0, 3)).size).toBe(3);
+    expect(new Set(watchDraws.slice(3, 6)).size).toBe(3);
+    expect(new Set(watchDraws.slice(6, 9)).size).toBe(3);
+    expect(watchDraws[3]).not.toBe(watchDraws[2]);
+    expect(watchDraws[6]).not.toBe(watchDraws[5]);
     expect(new Set(allDraws).size).toBe(6);
   });
 
@@ -360,44 +376,44 @@ describe('JarStore & computeJarFillRatios', () => {
     stubFetch(() => new Response(sharedCsv, { status: 200 }));
 
     const store = new JarStore();
-    expect(await store.drawRandom('others')).toBeNull();
-    expect(store.getCount('others')).toBe(0);
+    expect(await store.drawRandom('books')).toBeNull();
+    expect(store.getCount('books')).toBe(0);
   });
 
   test('computes relative fill ratios with all jar always fullest and category jars proportional to each other', () => {
     const ratios = computeJarFillRatios({
       all: 37,
-      articles: 20,
-      youtube: 10,
-      recommendations: 5,
-      others: 2,
+      watch: 20,
+      games: 10,
+      books: 5,
+      articles: 2,
     });
 
     expect(ratios.all).toBe(1);
-    expect(ratios.articles).toBeCloseTo(MAX_CATEGORY_FILL_RATIO, 5);
-    expect(ratios.youtube).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.5, 5);
-    expect(ratios.recommendations).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.25, 5);
-    expect(ratios.others).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.1, 5);
+    expect(ratios.watch).toBeCloseTo(MAX_CATEGORY_FILL_RATIO, 5);
+    expect(ratios.games).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.5, 5);
+    expect(ratios.books).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.25, 5);
+    expect(ratios.articles).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.1, 5);
 
     const singleCategory = computeJarFillRatios({
       all: 12,
-      youtube: 12,
+      watch: 12,
+      games: 0,
+      books: 0,
       articles: 0,
-      recommendations: 0,
-      others: 0,
     });
     expect(singleCategory.all).toBe(1);
-    expect(singleCategory.youtube).toBeLessThan(singleCategory.all);
-    expect(singleCategory.articles).toBe(0);
+    expect(singleCategory.watch).toBeLessThan(singleCategory.all);
+    expect(singleCategory.games).toBe(0);
 
     expect(
-      computeJarFillRatios({ all: 0, youtube: 0, articles: 0, recommendations: 0, others: 0 }),
+      computeJarFillRatios({ all: 0, watch: 0, games: 0, books: 0, articles: 0 }),
     ).toEqual({
       all: 0,
-      youtube: 0,
+      watch: 0,
+      games: 0,
+      books: 0,
       articles: 0,
-      recommendations: 0,
-      others: 0,
     });
   });
 });

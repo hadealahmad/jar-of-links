@@ -10,7 +10,7 @@ import { isYouTubeUrl } from '../ogResolver';
 const PUBLIC_DIR = resolve(import.meta.dir, '../../../public');
 
 describe('public/data/links.csv unified 2-column dataset', () => {
-  test('links.csv has strictly url,type columns and computes valid relative fill ratios across jars', () => {
+  test('links.csv has strictly url,type columns, populates all 4 category jars, and computes valid fill ratios', () => {
     expect(JAR_CONFIGS.length).toBe(5);
     expect(JAR_BY_ID.all.scale).toBeGreaterThan(1.2);
 
@@ -35,10 +35,10 @@ describe('public/data/links.csv unified 2-column dataset', () => {
 
     const counts: Record<string, number> = {
       all: entries.length,
-      youtube: 0,
+      watch: 0,
+      games: 0,
+      books: 0,
       articles: 0,
-      recommendations: 0,
-      others: 0,
     };
 
     for (const entry of entries) {
@@ -52,21 +52,20 @@ describe('public/data/links.csv unified 2-column dataset', () => {
     const ratios = computeJarFillRatios(counts);
     expect(ratios.all).toBe(1);
     for (const categoryId of CATEGORY_JAR_IDS) {
-      if (counts[categoryId] === 0) {
-        expect(ratios[categoryId]).toBe(0);
-      } else {
-        expect(ratios[categoryId]).toBeGreaterThan(0);
-        expect(ratios[categoryId]).toBeLessThan(ratios.all);
-      }
+      expect(counts[categoryId]).toBeGreaterThan(0);
+      expect(ratios[categoryId]).toBeGreaterThan(0);
+      expect(ratios[categoryId]).toBeLessThan(ratios.all);
     }
   });
 
-  test('youtube-typed rows contain valid YouTube video, playlist, or channel URLs', () => {
+  test('watch-typed rows contain valid YouTube or anime/video media URLs', () => {
     const raw = readFileSync(resolve(PUBLIC_DIR, 'data/links.csv'), 'utf-8');
-    const youtubeEntries = parseLinksCsv(raw).filter((e) => e.type === 'youtube');
+    const watchEntries = parseLinksCsv(raw).filter((e) => e.type === 'watch');
+    expect(watchEntries.length).toBeGreaterThan(0);
 
-    for (const entry of youtubeEntries) {
-      expect(isYouTubeUrl(entry.url)).toBe(true);
+    for (const entry of watchEntries) {
+      const host = new URL(entry.url).hostname.toLowerCase().replace(/^www\./, '');
+      expect(isYouTubeUrl(entry.url) || host === 'anilist.co').toBe(true);
     }
   });
 });

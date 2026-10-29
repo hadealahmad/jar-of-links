@@ -96,14 +96,14 @@ interface JarRuntime {
   shadowMaterial: THREE.MeshBasicMaterial;
 }
 
-/** RTL right-to-left shelf layout: يوتيوب (+5), مقالات (+2.55), الكل (0), توصيات (-2.55), أخرى (-5) */
+/** RTL right-to-left shelf layout: مرئيات (+5), ألعاب (+2.55), الكل (0), كتب (-2.55), مقالات (-5) */
 function createDesktopLayout(): StageLayout {
   const slots: Record<JarId, JarSlot> = {
-    youtube: { x: 5.0, y: -0.75, z: 0 },
-    articles: { x: 2.55, y: -0.75, z: 0 },
+    watch: { x: 5.0, y: -0.75, z: 0 },
+    games: { x: 2.55, y: -0.75, z: 0 },
     all: { x: 0, y: -0.75, z: 0.25 },
-    recommendations: { x: -2.55, y: -0.75, z: 0 },
-    others: { x: -5.0, y: -0.75, z: 0 },
+    books: { x: -2.55, y: -0.75, z: 0 },
+    articles: { x: -5.0, y: -0.75, z: 0 },
   };
 
   const top = -0.75 + JAR_BODY_HEIGHT * 1.38;
@@ -124,11 +124,11 @@ function createDesktopLayout(): StageLayout {
 
 function createMobileLayout(): StageLayout {
   const slots: Record<JarId, JarSlot> = {
-    youtube: { x: 1.65, y: 2.45, z: 0 },
-    articles: { x: -1.65, y: 2.45, z: 0 },
+    watch: { x: 1.65, y: 2.45, z: 0 },
+    games: { x: -1.65, y: 2.45, z: 0 },
     all: { x: 0, y: -0.35, z: 0.2 },
-    recommendations: { x: 1.65, y: -2.95, z: 0 },
-    others: { x: -1.65, y: -2.95, z: 0 },
+    books: { x: 1.65, y: -2.95, z: 0 },
+    articles: { x: -1.65, y: -2.95, z: 0 },
   };
 
   const top = 2.45 + JAR_BODY_HEIGHT;

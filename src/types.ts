@@ -1,4 +1,4 @@
-export type JarId = 'all' | 'youtube' | 'articles' | 'recommendations' | 'others';
+export type JarId = 'all' | 'watch' | 'games' | 'books' | 'articles';
 
 /** Concrete link category stored in the `type` column of `public/data/links.csv`. */
 export type LinkType = Exclude<JarId, 'all'>;

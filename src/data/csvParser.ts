@@ -24,7 +24,41 @@ const HEADER_ALIASES: Record<FieldName, readonly string[]> = {
 };
 
 const TYPE_ALIASES: Record<LinkType, readonly string[]> = {
-  youtube: ['youtube', 'yt', 'video', 'videos', 'يوتيوب'],
+  watch: [
+    'watch',
+    'video',
+    'videos',
+    'youtube',
+    'yt',
+    'anime',
+    'show',
+    'shows',
+    'series',
+    'movie',
+    'movies',
+    'film',
+    'films',
+    'media',
+    'مرئيات',
+    'فيديو',
+    'يوتيوب',
+    'أنمي',
+    'انمي',
+    'مسلسلات',
+    'عروض',
+  ],
+  games: ['games', 'game', 'gaming', 'steam', 'play', 'ألعاب', 'العاب', 'لعبة'],
+  books: [
+    'books',
+    'book',
+    'novel',
+    'novels',
+    'goodreads',
+    'كتب',
+    'كتاب',
+    'روايات',
+    'رواية',
+  ],
   articles: [
     'articles',
     'article',
@@ -34,23 +68,13 @@ const TYPE_ALIASES: Record<LinkType, readonly string[]> = {
     'essay',
     'essays',
     'reading',
+    'wiki',
     'مقالات',
     'مقال',
     'مقالة',
+    'تدوينات',
+    'قراءات',
   ],
-  recommendations: [
-    'recommendations',
-    'recommendation',
-    'rec',
-    'recs',
-    'tool',
-    'tools',
-    'pick',
-    'picks',
-    'توصيات',
-    'توصية',
-  ],
-  others: ['others', 'other', 'misc', 'curiosity', 'curiosities', 'fun', 'أخرى', 'اخرى'],
 };
 
 function normalizeToken(raw: string): string {
@@ -73,16 +97,66 @@ export function parseExplicitLinkType(raw: string | undefined): LinkType | null 
   return null;
 }
 
+function inferLinkTypeFromUrl(rawUrl: string): LinkType {
+  if (isYouTubeUrl(rawUrl)) return 'watch';
+
+  try {
+    const trimmed = rawUrl.trim();
+    const parsed = new URL(/^www\./i.test(trimmed) ? `https://${trimmed}` : trimmed);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+
+    if (
+      host === 'store.steampowered.com' ||
+      host.endsWith('.itch.io') ||
+      host === 'itch.io' ||
+      host === 'gog.com' ||
+      host === 'store.epicgames.com'
+    ) {
+      return 'games';
+    }
+
+    if (
+      host === 'goodreads.com' ||
+      host.endsWith('.goodreads.com') ||
+      host === 'openlibrary.org' ||
+      host === 'app.thestorygraph.com'
+    ) {
+      return 'books';
+    }
+
+    if (
+      (host === 'anilist.co' && /^\/manga\//i.test(parsed.pathname)) ||
+      (host === 'myanimelist.net' && /^\/manga\//i.test(parsed.pathname))
+    ) {
+      return 'books';
+    }
+
+    if (
+      host === 'anilist.co' ||
+      host === 'myanimelist.net' ||
+      host === 'vimeo.com' ||
+      host === 'twitch.tv' ||
+      host === 'letterboxd.com' ||
+      host === 'imdb.com'
+    ) {
+      return 'watch';
+    }
+  } catch {
+    // Fall through to default category.
+  }
+
+  return 'articles';
+}
+
 /**
- * Normalize a CSV `type` value into one of the four category jars.
- * When `raw` is empty or unrecognized, YouTube URLs default to `'youtube'`
- * and all other URLs default to `'others'`.
+ * Normalize a CSV `type` value into one of the four category jars
+ * (`watch`, `games`, `books`, `articles`), inferring from the URL host when omitted.
  */
 export function normalizeLinkType(raw: string | undefined, url?: string): LinkType {
   const explicit = parseExplicitLinkType(raw);
   if (explicit) return explicit;
-  if (url && isYouTubeUrl(url)) return 'youtube';
-  return 'others';
+  if (url) return inferLinkTypeFromUrl(url);
+  return 'articles';
 }
 
 /**
