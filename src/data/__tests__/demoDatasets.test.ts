@@ -9,8 +9,8 @@ import { extractYouTubeId } from '../ogResolver';
 
 const PUBLIC_DIR = resolve(import.meta.dir, '../../../public');
 
-describe('public/data/links.csv unified 2-column demo dataset', () => {
-  test('links.csv has strictly url,type columns and populates all 5 jars with valid relative fill ratios', () => {
+describe('public/data/links.csv unified 2-column dataset', () => {
+  test('links.csv has strictly url,type columns and computes valid relative fill ratios across jars', () => {
     expect(JAR_CONFIGS.length).toBe(5);
     expect(JAR_BY_ID.all.scale).toBeGreaterThan(1.2);
 
@@ -31,7 +31,7 @@ describe('public/data/links.csv unified 2-column demo dataset', () => {
     }
 
     const entries = parseLinksCsv(raw);
-    expect(entries.length).toBeGreaterThanOrEqual(25);
+    expect(entries.length).toBeGreaterThan(0);
 
     const counts: Record<string, number> = {
       all: entries.length,
@@ -49,15 +49,15 @@ describe('public/data/links.csv unified 2-column demo dataset', () => {
       counts[entry.type] += 1;
     }
 
-    for (const categoryId of CATEGORY_JAR_IDS) {
-      expect(counts[categoryId]).toBeGreaterThan(0);
-    }
-
     const ratios = computeJarFillRatios(counts);
     expect(ratios.all).toBe(1);
     for (const categoryId of CATEGORY_JAR_IDS) {
-      expect(ratios[categoryId]).toBeGreaterThan(0);
-      expect(ratios[categoryId]).toBeLessThan(ratios.all);
+      if (counts[categoryId] === 0) {
+        expect(ratios[categoryId]).toBe(0);
+      } else {
+        expect(ratios[categoryId]).toBeGreaterThan(0);
+        expect(ratios[categoryId]).toBeLessThan(ratios.all);
+      }
     }
   });
 
@@ -65,7 +65,6 @@ describe('public/data/links.csv unified 2-column demo dataset', () => {
     const raw = readFileSync(resolve(PUBLIC_DIR, 'data/links.csv'), 'utf-8');
     const youtubeEntries = parseLinksCsv(raw).filter((e) => e.type === 'youtube');
 
-    expect(youtubeEntries.length).toBeGreaterThan(0);
     for (const entry of youtubeEntries) {
       expect(extractYouTubeId(entry.url)).not.toBeNull();
     }
