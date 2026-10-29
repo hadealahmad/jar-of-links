@@ -26,12 +26,12 @@ function jsonResponse(payload: unknown): Response {
 }
 
 describe('parseLinksCsv', () => {
-  test('parses a 6-column RFC-4180 CSV (url,type,title,description,image,site_name) with BOM, quoted commas, escaped quotes and CRLF', () => {
+  test('parses a 2-column RFC-4180 CSV (url,type) with BOM, quoted fields and CRLF', () => {
     const csv =
-      '\uFEFFurl,type,title,description,image,site_name\r\n' +
-      'https://example.com/first,articles,"Hello, world","First line\nSecond ""quoted"" line","https://images.example.com/one.png","Example Site"\r\n' +
+      '\uFEFFurl,type\r\n' +
+      'https://example.com/first,articles\r\n' +
       '\r\n' +
-      'https://example.com/second,recommendations,Plain title,Plain description,,\r\n';
+      '"https://example.com/second","recommendations"\r\n';
 
     const entries = parseLinksCsv(csv);
 
@@ -39,40 +39,26 @@ describe('parseLinksCsv', () => {
     expect(entries[0]).toEqual({
       url: 'https://example.com/first',
       type: 'articles',
-      title: 'Hello, world',
-      description: 'First line\nSecond "quoted" line',
-      image: 'https://images.example.com/one.png',
-      siteName: 'Example Site',
     });
     expect(entries[1]).toEqual({
       url: 'https://example.com/second',
       type: 'recommendations',
-      title: 'Plain title',
-      description: 'Plain description',
-      image: undefined,
-      siteName: undefined,
     });
   });
 
-  test('maps columns case-insensitively using header aliases and normalizes English/Arabic types', () => {
+  test('maps columns case-insensitively in any order and normalizes English/Arabic types', () => {
     const csv = [
-      'CATEGORY,LINK,DESC,THUMBNAIL,SITE',
-      'مقالات,https://example.com/post,A nice description,https://cdn.example.com/p.png,Example',
-      'recs,https://example.com/tool,Handy tool,,ToolSite',
+      'CATEGORY,LINK',
+      'مقالات,https://example.com/post',
+      'recs,https://example.com/tool',
     ].join('\n');
 
     const entries = parseLinksCsv(csv);
 
-    expect(entries).toHaveLength(2);
-    expect(entries[0]).toEqual({
-      url: 'https://example.com/post',
-      type: 'articles',
-      title: undefined,
-      description: 'A nice description',
-      image: 'https://cdn.example.com/p.png',
-      siteName: 'Example',
-    });
-    expect(entries[1].type).toBe('recommendations');
+    expect(entries).toEqual([
+      { url: 'https://example.com/post', type: 'articles' },
+      { url: 'https://example.com/tool', type: 'recommendations' },
+    ]);
   });
 
   test('infers type when omitted (youtube URLs -> youtube, others -> others) and ignores comments/blank lines', () => {
@@ -88,7 +74,7 @@ describe('parseLinksCsv', () => {
 
     const entries = parseLinksCsv(csv);
 
-    expect(entries.map((entry) => ({ url: entry.url, type: entry.type }))).toEqual([
+    expect(entries).toEqual([
       { url: 'https://youtu.be/dQw4w9WgXcQ', type: 'youtube' },
       { url: 'https://www.github.com/', type: 'others' },
       { url: 'https://news.ycombinator.com/item?id=42', type: 'articles' },
@@ -97,54 +83,42 @@ describe('parseLinksCsv', () => {
     expect(normalizeLinkType(undefined, 'https://example.com')).toBe('others');
   });
 
-  test('parses headerless positional rows with or without an explicit type column', () => {
+  test('parses headerless url,type and type,url rows', () => {
     const csv = [
-      'https://example.com/a,recommendations,"Title, with comma",Description,https://img.example.com/a.jpg,Site A',
-      'https://example.com/b,Legacy Title,,,',
+      'https://example.com/a,recommendations',
+      'articles,https://example.com/b',
     ].join('\n');
 
-    const entries = parseLinksCsv(csv);
-
-    expect(entries).toHaveLength(2);
-    expect(entries[0].type).toBe('recommendations');
-    expect(entries[0].title).toBe('Title, with comma');
-    expect(entries[0].siteName).toBe('Site A');
-    expect(entries[0].image).toBe('https://img.example.com/a.jpg');
-    expect(entries[1]).toEqual({
-      url: 'https://example.com/b',
-      type: 'others',
-      title: 'Legacy Title',
-      description: undefined,
-      image: undefined,
-      siteName: undefined,
-    });
+    expect(parseLinksCsv(csv)).toEqual([
+      { url: 'https://example.com/a', type: 'recommendations' },
+      { url: 'https://example.com/b', type: 'articles' },
+    ]);
   });
 
   test('normalizes www. URLs and filters malformed or non-http(s) URLs', () => {
     const csv = [
-      'url,type,title',
-      'www.example.com/path,articles,Valid www',
-      'https://example.com/ok,others,Valid https',
-      'ftp://example.com/file,others,Invalid protocol',
-      'mailto:someone@example.com,others,Invalid mailto',
-      'javascript:alert(1),others,Invalid javascript',
-      'not a url,others,Invalid text',
-      'example.com/no-scheme,others,Missing scheme',
-      ',others,Empty URL',
+      'url,type',
+      'www.example.com/path,articles',
+      'https://example.com/ok,others',
+      'ftp://example.com/file,others',
+      'mailto:someone@example.com,others',
+      'javascript:alert(1),others',
+      'not a url,others',
+      'example.com/no-scheme,others',
+      ',others',
     ].join('\n');
 
     const entries = parseLinksCsv(csv);
 
-    expect(entries.map((entry) => entry.url)).toEqual([
-      'https://www.example.com/path',
-      'https://example.com/ok',
+    expect(entries).toEqual([
+      { url: 'https://www.example.com/path', type: 'articles' },
+      { url: 'https://example.com/ok', type: 'others' },
     ]);
-    expect(entries.map((entry) => entry.title)).toEqual(['Valid www', 'Valid https']);
   });
 
   test('returns an empty array for empty input and header-only files', () => {
     expect(parseLinksCsv('')).toEqual([]);
-    expect(parseLinksCsv('url,type,title,description,image,site_name')).toEqual([]);
+    expect(parseLinksCsv('url,type')).toEqual([]);
     expect(parseLinksCsv('\uFEFF\n\n# only comments\n')).toEqual([]);
   });
 });
@@ -185,7 +159,6 @@ describe('resolveLinkPreview', () => {
     expect(preview.title).toBe('Mock Video');
     expect(preview.description).toBe('مقطع بواسطة Mock Author');
     expect(preview.image).toBe('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg');
-    expect(preview.siteName).toBe('YouTube');
     expect(preview.hostname).toBe('youtube.com');
     expect(preview.favicon).toBe('https://www.google.com/s2/favicons?domain=youtube.com&sz=64');
     expect(preview.jarId).toBe('youtube');
@@ -194,7 +167,7 @@ describe('resolveLinkPreview', () => {
     expect(requested).toContain('youtube.com/oembed');
   });
 
-  test('enriches missing fields from Microlink on the general path', async () => {
+  test('resolves title, description and image from Microlink OG metadata', async () => {
     stubFetch(() =>
       jsonResponse({
         status: 'success',
@@ -202,7 +175,6 @@ describe('resolveLinkPreview', () => {
           title: 'OG Title',
           description: 'OG Description',
           image: { url: 'https://og.example.com/image.png' },
-          publisher: 'OG Publisher',
         },
       }),
     );
@@ -215,7 +187,6 @@ describe('resolveLinkPreview', () => {
     expect(preview.title).toBe('OG Title');
     expect(preview.description).toBe('OG Description');
     expect(preview.image).toBe('https://og.example.com/image.png');
-    expect(preview.siteName).toBe('OG Publisher');
     expect(preview.hostname).toBe('example.com');
     expect(preview.jarId).toBe('articles');
   });
@@ -233,47 +204,20 @@ describe('resolveLinkPreview', () => {
     expect(preview.title).toBe('Cool Article');
     expect(preview.description).toBe('اضغط على هذه الورقة لفتح example.com في تبويب جديد.');
     expect(preview.image).toBeNull();
-    expect(preview.siteName).toBe('example.com');
     expect(preview.hostname).toBe('example.com');
     expect(preview.favicon).toBe('https://www.google.com/s2/favicons?domain=example.com&sz=64');
-  });
-
-  test('keeps pre-populated entry metadata without fetching', async () => {
-    let calls = 0;
-    stubFetch(() => {
-      calls++;
-      return jsonResponse({ status: 'success', data: {} });
-    });
-
-    const preview = await resolveLinkPreview(
-      {
-        url: 'https://example.com/ready',
-        type: 'others',
-        title: 'Ready Title',
-        description: 'Ready Description',
-        image: 'https://example.com/ready.png',
-        siteName: 'Ready Site',
-      },
-      JAR_BY_ID.others,
-    );
-
-    expect(calls).toBe(0);
-    expect(preview.title).toBe('Ready Title');
-    expect(preview.description).toBe('Ready Description');
-    expect(preview.image).toBe('https://example.com/ready.png');
-    expect(preview.siteName).toBe('Ready Site');
   });
 });
 
 describe('JarStore & computeJarFillRatios', () => {
   const sharedCsv = [
-    'url,type,title',
-    'https://www.youtube.com/watch?v=c63KFuxi_IU,youtube,YT 1',
-    'https://www.youtube.com/watch?v=Qz0KTGYJtUk,youtube,YT 2',
-    'https://www.youtube.com/watch?v=WUlgvNe4BLU,youtube,YT 3',
-    'https://example.com/art-1,articles,Article 1',
-    'https://example.com/art-2,articles,Article 2',
-    'https://example.com/rec-1,recommendations,Rec 1',
+    'url,type',
+    'https://www.youtube.com/watch?v=c63KFuxi_IU,youtube',
+    'https://www.youtube.com/watch?v=Qz0KTGYJtUk,youtube',
+    'https://www.youtube.com/watch?v=WUlgvNe4BLU,youtube',
+    'https://example.com/art-1,articles',
+    'https://example.com/art-2,articles',
+    'https://example.com/rec-1,recommendations',
   ].join('\n');
 
   test('fetches links.csv once across all jars, partitions by type, and populates all with every row', async () => {
@@ -376,7 +320,6 @@ describe('JarStore & computeJarFillRatios', () => {
     expect(ratios.recommendations).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.25, 5);
     expect(ratios.others).toBeCloseTo(MAX_CATEGORY_FILL_RATIO * 0.1, 5);
 
-    // Even if a single category holds 100% of links, `all` (1.0) remains visually fuller.
     const singleCategory = computeJarFillRatios({
       all: 12,
       youtube: 12,
@@ -388,7 +331,6 @@ describe('JarStore & computeJarFillRatios', () => {
     expect(singleCategory.youtube).toBeLessThan(singleCategory.all);
     expect(singleCategory.articles).toBe(0);
 
-    // Completely empty dataset gives 0 across all jars.
     expect(
       computeJarFillRatios({ all: 0, youtube: 0, articles: 0, recommendations: 0, others: 0 }),
     ).toEqual({

@@ -1,39 +1,39 @@
-url,type,title,description,image,site_name
-https://thebookofshaders.com/,articles,The Book of Shaders,"A gentle, interactive walk through fragment shaders, from shapes and colors to noise, patterns and generative art.",https://thebookofshaders.com/thumb.png,The Book of Shaders
-https://ciechanow.ski/gears/,articles,Gears – Bartosz Ciechanowski,"Draggable diagrams explain gear ratios, torque and the mechanics behind every clock, windmill and gearbox.",https://ciechanow.ski/images/og/gears.jpg,Bartosz Ciechanowski
-https://www.redblobgames.com/grids/hexagons/,articles,Red Blob Games: Hexagonal Grids,"Amit Patel's definitive guide to hex grids: coordinates, distances, line drawing and pixel-perfect layout.",https://www.redblobgames.com/thumbnail/hexagons.jpg,Red Blob Games
-https://www.redblobgames.com/pathfinding/a-star/introduction.html,articles,Red Blob Games: Introduction to the A* Algorithm,"An interactive tutorial that builds A* from breadth-first search, with animated maps you can scrub through.",https://www.redblobgames.com/thumbnail/astar-intro.jpg,Red Blob Games
-https://threejs.org/manual/#en/fundamentals,articles,three.js manual,"The official manual's opening chapter on scenes, cameras and renderers, and the mental model behind every Three.js project.",,three.js
-https://developer.mozilla.org/en-US/docs/Games/Techniques/3D_on_the_web/Building_up_a_basic_demo_with_Three.js,articles,Building up a basic demo with Three.js - Game development | MDN,"MDN's hands-on introduction to a rotating 3D cube, from setting up the scene to adding lights and animation.",https://developer.mozilla.org/mdn-social-image.46ac2375.png,MDN Web Docs
-https://www.joelonsoftware.com/2000/08/09/the-joel-test-12-steps-to-better-code/,articles,The Joel Test: 12 Steps to Better Code,Twelve yes-or-no questions from 2000 that still expose whether a team can ship software sanely.,https://i0.wp.com/www.joelonsoftware.com/wp-content/uploads/2016/12/11969842.jpg?fit=400%2C400&ssl=1,Joel on Software
-https://mcfunley.com/choose-boring-technology,articles,Choose Boring Technology,Dan McKinley's essay on innovation tokens: spend them rarely and let the rest of your stack be pleasantly dull.,https://mcfunley.com/assets/images/mountains-square.jpg,Dan McKinley
-https://en.wikipedia.org/wiki/Pixel_art,articles,Pixel art - Wikipedia,From 8-bit constraints to modern indie games: how pixel art became a deliberate aesthetic instead of a limitation.,https://thumb.wikimedia.org/wikipedia/commons/thumb/7/71/Pixel_Art_Cat_with_Zoom-in_Detail.svg/1280px-Pixel_Art_Cat_with_Zoom-in_Detail.svg.png?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=thumbnail,Wikipedia
-https://pudding.cool/,articles,The Pudding,"Visual essays that explain culture with data, scroll-driven charts and genuinely beautiful design.",https://pudding.cool/common/assets/social/og-facebook.jpg,The Pudding
-https://thecreativeindependent.com/,articles,The Creative Independent,"A growing resource of emotional and practical guidance for creative people, built from long-form interviews.",https://thecreativeindependent.com/images/facebook-share-graphic.jpg,The Creative Independent
-https://www.openculture.com/,articles,Open Culture,"Thousands of free courses, audiobooks, films and textbooks, curated since 2006.",https://www.openculture.com/wp-content/themes/openculture_v4c/images/OC-newlogo.png,Open Culture
-https://ciechanow.ski/cameras-and-lenses/,articles,,,,
-https://alistapart.com/article/dao/,articles,,,,
-https://www.youtube.com/watch?v=c63KFuxi_IU,youtube,Three.js Journey - Trailer,A cinematic trailer for the course that taught a generation of developers to build 3D worlds on the web.,https://i.ytimg.com/vi/c63KFuxi_IU/hqdefault.jpg,YouTube
-https://www.youtube.com/watch?v=Qz0KTGYJtUk,youtube,Coding Adventure: Ray Tracing,"Sebastian Lague builds a path tracer from scratch in C#, one beautifully noisy render at a time.",https://i.ytimg.com/vi/Qz0KTGYJtUk/hqdefault.jpg,YouTube
-https://www.youtube.com/watch?v=WUlgvNe4BLU,youtube,“How do you start Pixel Art?”…Here’s what I did!,"A calm, practical answer to the hardest pixel-art question: where do you actually start?",https://i.ytimg.com/vi/WUlgvNe4BLU/hqdefault.jpg,YouTube
-https://www.youtube.com/watch?v=yJDv-zdhzMY,youtube,"The Mother of All Demos, presented by Douglas Engelbart (1968)","The 1968 demo that previewed the mouse, hypertext, video calls and collaborative editing in a single sitting.",https://i.ytimg.com/vi/yJDv-zdhzMY/hqdefault.jpg,YouTube
-https://www.youtube.com/watch?v=tvZ43JqrvXA,youtube,The Apple IIe on a Card,"A tiny modern board that recreates the Apple IIe, plus a tour of the retro hardware that started it all.",https://i.ytimg.com/vi/tvZ43JqrvXA/hqdefault.jpg,YouTube
-https://www.youtube.com/watch?v=Fy0aCDmgnxg,youtube,Juice it or lose it - a talk by Martin Jonasson & Petri Purho,"A legendary 2012 talk that adds screenshake, particles and sound to a plain Breakout clone until it feels alive.",https://i.ytimg.com/vi/Fy0aCDmgnxg/hqdefault.jpg,YouTube
-https://www.youtube.com/watch?v=AJdEqssNZ-U,youtube,"Jan Willem Nijman - Vlambeer - ""The art of screenshake"" at INDIGO Classes 2013",Vlambeer's Jan Willem Nijman shares thirty tiny tricks that make game feel unforgettable.,https://i.ytimg.com/vi/AJdEqssNZ-U/hqdefault.jpg,YouTube
-https://www.youtube.com/watch?v=nn2MXwplMZA,youtube,The World Design of Super Metroid | Boss Keys,Game Maker's Toolkit maps Super Metroid's labyrinth and explains why its world still feels like a masterpiece.,https://i.ytimg.com/vi/nn2MXwplMZA/hqdefault.jpg,YouTube
-https://www.youtube.com/watch?v=h6fcK_fRYaI,youtube,The Egg - A Short Story,"Kurzgesagt's animated take on Andy Weir's short story about one life, the universe, and everyone in it.",https://i.ytimg.com/vi/h6fcK_fRYaI/hqdefault.jpg,YouTube
-https://www.youtube.com/watch?v=6avJHaC3C2U,youtube,The Art of Code - Dylan Beattie,Dylan Beattie traces programming from machine code to rock operas and argues that code is a creative medium.,https://i.ytimg.com/vi/6avJHaC3C2U/hqdefault.jpg,YouTube
-https://www.youtube.com/watch?v=17WoOqgXsRM,youtube,,,,
-https://www.aseprite.org/,recommendations,Aseprite,"The beloved pixel-art editor: animation timelines, layers, tilemaps and a palette workflow built for sprites.",https://www.aseprite.org/assets/images/og-image.png,Aseprite
-https://lospec.com/palette-list,recommendations,Palette List,"Over 2,500 free pixel-art palettes, filterable by color count and ready to import into Aseprite, GIMP or Photoshop.",https://cdn.lospec.com/static/homepage/palette-list.png,Lospec
-https://excalidraw.com/,recommendations,Excalidraw — Collaborative whiteboarding made easy,A hand-drawn-feeling collaborative whiteboard that runs in the browser and exports clean sketchy diagrams.,https://excalidraw.com/og-image-3.png,Excalidraw
-https://www.shadertoy.com/,recommendations,Shadertoy,"A playground of community-written GLSL shaders, from raymarched landscapes to impossible fractals, all in a browser tab.",,Shadertoy
-https://threejs-journey.com/,recommendations,Three.js Journey — Learn WebGL with Three.js,"Bruno Simon's 87-lesson course covering Three.js, WebGL, shaders and WebGPU with real projects.",https://threejs-journey.com/assets/social/share-image.png?cb=b,Three.js Journey
-https://squoosh.app/,recommendations,Squoosh,"A browser-based image compressor that compares WebP, AVIF and JPEG side by side without uploading a single byte.",https://squoosh.app/c/icon-large-maskable-c2078ced.png,Squoosh
-https://obsidian.md/,recommendations,Obsidian - Sharpen your thinking,"Local-first Markdown notes that link like a personal wiki, with a plugin ecosystem for everything else.",https://obsidian.md/images/banner.png,Obsidian
-https://ray.so/,recommendations,,,,
-https://neal.fun/,others,Neal.fun,"A cabinet of internet wonders: The Deep Sea, Space Elevator, The Password Game and dozens more tiny masterpieces.",,Neal.fun
-https://window-swap.com/,others,WindowSwap,Open a random window somewhere in the world and watch someone else's weather for a minute.,https://www.window-swap.com/TwitterCardImg.png,WindowSwap
-https://bruno-simon.com/,others,Bruno Simon,A drivable low-poly portfolio: steer a toy car around a tiny island built with Three.js.,https://bruno-simon.com/social/share-image.png?cb=a,Bruno Simon
-https://radio.garden/,others,Explore live radio by rotating the globe,"Spin a 3D globe and tune into thousands of live radio stations, city by city.",https://radio.garden/public/icons/rg-facebook-1.jpg,Radio Garden
-https://pointerpointer.com/,others,,,,
+url,type
+https://thebookofshaders.com/,articles
+https://ciechanow.ski/gears/,articles
+https://www.redblobgames.com/grids/hexagons/,articles
+https://www.redblobgames.com/pathfinding/a-star/introduction.html,articles
+https://threejs.org/manual/#en/fundamentals,articles
+https://developer.mozilla.org/en-US/docs/Games/Techniques/3D_on_the_web/Building_up_a_basic_demo_with_Three.js,articles
+https://www.joelonsoftware.com/2000/08/09/the-joel-test-12-steps-to-better-code/,articles
+https://mcfunley.com/choose-boring-technology,articles
+https://en.wikipedia.org/wiki/Pixel_art,articles
+https://pudding.cool/,articles
+https://thecreativeindependent.com/,articles
+https://www.openculture.com/,articles
+https://ciechanow.ski/cameras-and-lenses/,articles
+https://alistapart.com/article/dao/,articles
+https://www.youtube.com/watch?v=c63KFuxi_IU,youtube
+https://www.youtube.com/watch?v=Qz0KTGYJtUk,youtube
+https://www.youtube.com/watch?v=WUlgvNe4BLU,youtube
+https://www.youtube.com/watch?v=yJDv-zdhzMY,youtube
+https://www.youtube.com/watch?v=tvZ43JqrvXA,youtube
+https://www.youtube.com/watch?v=Fy0aCDmgnxg,youtube
+https://www.youtube.com/watch?v=AJdEqssNZ-U,youtube
+https://www.youtube.com/watch?v=nn2MXwplMZA,youtube
+https://www.youtube.com/watch?v=h6fcK_fRYaI,youtube
+https://www.youtube.com/watch?v=6avJHaC3C2U,youtube
+https://www.youtube.com/watch?v=17WoOqgXsRM,youtube
+https://www.aseprite.org/,recommendations
+https://lospec.com/palette-list,recommendations
+https://excalidraw.com/,recommendations
+https://www.shadertoy.com/,recommendations
+https://threejs-journey.com/,recommendations
+https://squoosh.app/,recommendations
+https://obsidian.md/,recommendations
+https://ray.so/,recommendations
+https://neal.fun/,others
+https://window-swap.com/,others
+https://bruno-simon.com/,others
+https://radio.garden/,others
+https://pointerpointer.com/,others

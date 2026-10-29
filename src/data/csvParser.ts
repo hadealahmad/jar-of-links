@@ -1,25 +1,26 @@
 import type { LinkEntry, LinkType } from '../types';
 import { extractYouTubeId } from './ogResolver';
 
-type FieldName = 'url' | 'type' | 'title' | 'description' | 'image' | 'siteName';
+type FieldName = 'url' | 'type';
 
-const FIELD_ORDER: readonly FieldName[] = [
-  'url',
-  'type',
-  'title',
-  'description',
-  'image',
-  'siteName',
-];
+const FIELD_ORDER: readonly FieldName[] = ['url', 'type'];
 
-/** Accepted (normalized) header spellings for each logical column. */
+/** Accepted (normalized) header spellings for the two CSV columns. */
 const HEADER_ALIASES: Record<FieldName, readonly string[]> = {
   url: ['url', 'link', 'linkurl', 'href', 'ogurl', 'الرابط', 'رابط'],
-  type: ['type', 'category', 'jar', 'jarid', 'kind', 'group', 'section', 'النوع', 'نوع', 'التصنيف', 'تصنيف'],
-  title: ['title', 'name', 'ogtitle', 'العنوان', 'عنوان'],
-  description: ['description', 'desc', 'summary', 'ogdescription', 'الوصف', 'وصف'],
-  image: ['image', 'ogimage', 'thumbnail', 'thumb', 'img', 'imageurl', 'الصورة', 'صورة'],
-  siteName: ['sitename', 'site', 'publisher', 'ogsitename', 'الموقع', 'موقع'],
+  type: [
+    'type',
+    'category',
+    'jar',
+    'jarid',
+    'kind',
+    'group',
+    'section',
+    'النوع',
+    'نوع',
+    'التصنيف',
+    'تصنيف',
+  ],
 };
 
 const TYPE_ALIASES: Record<LinkType, readonly string[]> = {
@@ -192,20 +193,17 @@ function looksLikeHeader(headerRow: string[]): boolean {
   if (!firstKey) return false;
   if (HEADER_ALIASES.url.includes(firstKey)) return true;
 
-  const isKnownFirstField = FIELD_ORDER.some((field) => HEADER_ALIASES[field].includes(firstKey));
-  if (!isKnownFirstField) return false;
+  if (HEADER_ALIASES.type.includes(firstKey)) {
+    return headerRow.some((cell) => HEADER_ALIASES.url.includes(normalizeToken(cell)));
+  }
 
-  return headerRow.some((cell) => HEADER_ALIASES.url.includes(normalizeToken(cell)));
+  return false;
 }
 
 function buildHeaderMap(headerRow: string[]): Record<FieldName, number> {
   const map: Record<FieldName, number> = {
     url: -1,
     type: -1,
-    title: -1,
-    description: -1,
-    image: -1,
-    siteName: -1,
   };
 
   headerRow.forEach((cell, index) => {
@@ -220,7 +218,6 @@ function buildHeaderMap(headerRow: string[]): Record<FieldName, number> {
     }
   });
 
-  // A header row without a recognizable URL column still falls back to column 0.
   if (map.url === -1) map.url = 0;
   return map;
 }
@@ -240,11 +237,6 @@ function normalizeUrl(raw: string): string | null {
   }
 }
 
-function cleanOptional(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
-
 function cellAt(row: string[], index: number): string {
   return index >= 0 ? (row[index] ?? '') : '';
 }
@@ -260,48 +252,32 @@ function rowToEntry(
     return {
       url,
       type: normalizeLinkType(cellAt(row, headerMap.type), url),
-      title: cleanOptional(cellAt(row, headerMap.title)),
-      description: cleanOptional(cellAt(row, headerMap.description)),
-      image: cleanOptional(cellAt(row, headerMap.image)),
-      siteName: cleanOptional(cellAt(row, headerMap.siteName)),
     };
   }
 
-  // Headerless mode: accept both `url,type,title,description,image,siteName`
-  // (when column 1 is a recognized category name) and `url,title,description,image,siteName`.
-  const url = normalizeUrl(cellAt(row, 0));
-  if (!url) return null;
-
-  const explicitSecondCol = parseExplicitLinkType(row[1]);
-  if (explicitSecondCol) {
+  // Headerless mode: `url,type` (or reversed `type,url` when cell 0 is a known type).
+  const firstAsUrl = normalizeUrl(cellAt(row, 0));
+  if (firstAsUrl) {
     return {
-      url,
-      type: explicitSecondCol,
-      title: cleanOptional(cellAt(row, 2)),
-      description: cleanOptional(cellAt(row, 3)),
-      image: cleanOptional(cellAt(row, 4)),
-      siteName: cleanOptional(cellAt(row, 5)),
+      url: firstAsUrl,
+      type: normalizeLinkType(cellAt(row, 1), firstAsUrl),
     };
   }
 
-  return {
-    url,
-    type: normalizeLinkType(undefined, url),
-    title: cleanOptional(cellAt(row, 1)),
-    description: cleanOptional(cellAt(row, 2)),
-    image: cleanOptional(cellAt(row, 3)),
-    siteName: cleanOptional(cellAt(row, 4)),
-  };
+  const firstAsType = parseExplicitLinkType(row[0]);
+  const secondAsUrl = normalizeUrl(cellAt(row, 1));
+  if (firstAsType && secondAsUrl) {
+    return {
+      url: secondAsUrl,
+      type: firstAsType,
+    };
+  }
+
+  return null;
 }
 
 /**
- * Parse the shared links CSV containing either a header row or plain data rows.
- *
- * Supported layouts:
- * - Header row (`url`/`link`, `type`/`category`, `title`, `description`/`desc`,
- *   `image`/`og_image`/`thumbnail`, `site_name`/`sitename`/`site`), case-insensitive.
- * - Headerless rows: `url,type,title,description,image,site_name` (or `url,title,...`
- *   / 1-column bare URLs with automatic `type` inference).
+ * Parse the shared `url,type` links CSV (with or without a header row).
  */
 export function parseLinksCsv(csvText: string): LinkEntry[] {
   if (!csvText) return [];

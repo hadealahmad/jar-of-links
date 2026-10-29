@@ -3,13 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Retro pixel-art Three.js jar of links powered by static CSV files",
+  "description": "Retro pixel-art Three.js jar of links powered by a static url,type CSV",
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
-    "test": "bun test",
-    "enrich": "bun run scripts/enrich-csv.ts"
+    "test": "bun test"
   },
   "dependencies": {
     "three": "^0.170.0"

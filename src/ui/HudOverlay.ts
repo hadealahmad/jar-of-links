@@ -84,7 +84,6 @@ export class HudOverlay {
   private readonly ogLoading: HTMLDivElement;
   private readonly loaderLabel: HTMLSpanElement;
   private readonly faviconEl: HTMLImageElement;
-  private readonly siteEl: HTMLSpanElement;
   private readonly hostEl: HTMLSpanElement;
   private readonly titleEl: HTMLHeadingElement;
   private readonly descEl: HTMLParagraphElement;
@@ -175,9 +174,8 @@ export class HudOverlay {
     this.faviconEl.decoding = 'async';
     this.faviconEl.referrerPolicy = 'no-referrer';
     this.faviconEl.hidden = true;
-    this.siteEl = el('span', 'paper-site', '');
     this.hostEl = el('span', 'paper-host', '');
-    meta.append(this.faviconEl, this.siteEl, this.hostEl);
+    meta.append(this.faviconEl, this.hostEl);
 
     this.titleEl = el('h2', 'paper-title', '');
     this.titleEl.id = titleId;
@@ -266,7 +264,6 @@ export class HudOverlay {
 
     this.faviconEl.hidden = true;
     this.faviconEl.removeAttribute('src');
-    this.siteEl.textContent = jarConfig.label;
     this.hostEl.textContent = '\u00b7\u00b7\u00b7';
     this.titleEl.textContent = 'جارٍ فتح القصاصة...';
     this.descEl.textContent = `يتم سحب ورقة عشوائية من مرطبان ${jarConfig.label}...`;
@@ -293,8 +290,7 @@ export class HudOverlay {
     const title = (preview.title || '').trim() || hostname || FALLBACK_TITLE;
     const description = (preview.description || '').trim() || FALLBACK_DESCRIPTION;
 
-    this.siteEl.textContent = (preview.siteName || '').trim() || hostname || 'رابط';
-    this.hostEl.textContent = hostname ? `\u00b7 ${hostname}` : '';
+    this.hostEl.textContent = hostname;
     this.titleEl.textContent = title;
     this.descEl.textContent = description;
 
@@ -455,7 +451,6 @@ export class HudOverlay {
     this.faviconEl.hidden = true;
     this.faviconEl.removeAttribute('src');
 
-    this.siteEl.textContent = '';
     this.hostEl.textContent = '';
     this.titleEl.textContent = '';
     this.descEl.textContent = '';
@@ -515,7 +510,7 @@ export class HudOverlay {
    * minimal inline SVG banner if it throws or returns junk.
    */
   private buildFallbackBanner(preview: ResolvedLinkPreview, accent: string): string {
-    const hostname = (preview.hostname || preview.siteName || '').trim();
+    const hostname = (preview.hostname || '').trim();
     const title = (preview.title || hostname || FALLBACK_TITLE).trim();
 
     try {

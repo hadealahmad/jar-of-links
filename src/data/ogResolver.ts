@@ -2,13 +2,12 @@ import type { JarConfig, LinkEntry, ResolvedLinkPreview } from '../types';
 
 const YOUTUBE_OEMBED_TIMEOUT_MS = 3000;
 const MICROLINK_TIMEOUT_MS = 3500;
-const OG_CACHE_PREFIX = 'jar_og_v1:';
+const OG_CACHE_PREFIX = 'jar_og_v2:';
 
 interface OgCacheEntry {
   title?: string;
   description?: string;
   image?: string;
-  siteName?: string;
 }
 
 /** Extract an 11-character YouTube video id from common URL shapes. */
@@ -123,14 +122,11 @@ function extractMicrolinkData(json: unknown): OgCacheEntry | null {
       ? asString(imageField)
       : asString((imageField as Record<string, unknown> | undefined)?.url);
 
-  const result: OgCacheEntry = {
+  return {
     title: asString(record.title),
     description: asString(record.description),
     image,
-    siteName: asString(record.publisher),
   };
-
-  return result;
 }
 
 function deriveFallbackTitle(parsed: URL | null, hostname: string, rawUrl: string): string {
@@ -160,13 +156,16 @@ function deriveFallbackTitle(parsed: URL | null, hostname: string, rawUrl: strin
 }
 
 /**
- * Resolve an Open Graph-style preview for a jar entry.
+ * Resolve Open Graph metadata (`title`, `description`, `image`) directly from the link URL.
  *
- * YouTube links use the oEmbed + thumbnail fast path. Everything else falls
- * back to the Microlink API (cached per session), and finally to a readable
- * procedural preview so the UI always has something to show.
+ * YouTube links use the oEmbed + deterministic thumbnail fast path. All other URLs
+ * resolve through the Microlink OG API (cached in `sessionStorage`), falling back to
+ * a clean URL-derived title and procedural pixel banner when offline or blocked.
  */
-export async function resolveLinkPreview(entry: LinkEntry, jarConfig: JarConfig): Promise<ResolvedLinkPreview> {
+export async function resolveLinkPreview(
+  entry: LinkEntry,
+  jarConfig: JarConfig,
+): Promise<ResolvedLinkPreview> {
   let parsed: URL | null = null;
   try {
     const trimmed = entry.url.trim();
@@ -180,27 +179,28 @@ export async function resolveLinkPreview(entry: LinkEntry, jarConfig: JarConfig)
     : entry.url.replace(/^https?:\/\//i, '').split(/[/?#]/)[0] || entry.url;
   const favicon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=64`;
 
-  let title = entry.title?.trim() ?? '';
-  let description = entry.description?.trim() ?? '';
-  let image = entry.image?.trim() ?? '';
-  let siteName = entry.siteName?.trim() ?? '';
+  const cacheKey = `${OG_CACHE_PREFIX}${entry.url}`;
+  let cached = readSessionCache(cacheKey);
+
+  let title = cached?.title ?? '';
+  let description = cached?.description ?? '';
+  let image = cached?.image ?? '';
 
   const youtubeId = extractYouTubeId(entry.url);
   if (youtubeId) {
     if (!image) image = `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`;
-    if (!siteName) siteName = 'YouTube';
 
     if (!title) {
       const oembed = await fetchYouTubeOEmbed(entry.url);
       if (oembed.title) title = oembed.title;
       if (!description && oembed.author) description = `مقطع بواسطة ${oembed.author}`;
+      if (title) {
+        writeSessionCache(cacheKey, { title, description: description || undefined, image });
+      }
     }
   }
 
   if (!title || !image) {
-    const cacheKey = `${OG_CACHE_PREFIX}${entry.url}`;
-    let cached = readSessionCache(cacheKey);
-
     if (!cached) {
       const endpoint = `https://api.microlink.io/?url=${encodeURIComponent(entry.url)}`;
       const json = await fetchJsonWithTimeout(endpoint, MICROLINK_TIMEOUT_MS);
@@ -215,7 +215,6 @@ export async function resolveLinkPreview(entry: LinkEntry, jarConfig: JarConfig)
       if (!title && cached.title) title = cached.title;
       if (!description && cached.description) description = cached.description;
       if (!image && cached.image) image = cached.image;
-      if (!siteName && cached.siteName) siteName = cached.siteName;
     }
   }
 
@@ -232,7 +231,6 @@ export async function resolveLinkPreview(entry: LinkEntry, jarConfig: JarConfig)
     title,
     description,
     image: image || null,
-    siteName: siteName || hostname,
     hostname,
     favicon,
     jarId: jarConfig.id,

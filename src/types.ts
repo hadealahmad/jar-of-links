@@ -28,10 +28,6 @@ export interface JarConfig {
 export interface LinkEntry {
   url: string;
   type: LinkType;
-  title?: string;
-  description?: string;
-  image?: string;
-  siteName?: string;
 }
 
 export interface ResolvedLinkPreview {
@@ -40,7 +36,6 @@ export interface ResolvedLinkPreview {
   description: string;
   /** Resolved OG image URL, or null if unavailable (falls back to procedural pixel banner) */
   image: string | null;
-  siteName: string;
   hostname: string;
   favicon: string;
   jarId: JarId;
