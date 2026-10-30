@@ -2,7 +2,7 @@
 
 ## 1. Product Vision & Requirements
 
-**Jar of Links** (`jar.hadealahmad.com`) is a static, retro pixel-art Three.js web experience hosted on GitHub Pages and built locally with **Bun + Vite + TypeScript + Three.js**.
+**Jar of Links** is a static, retro pixel-art Three.js web experience hosted on GitHub Pages and built locally with **Bun + Vite + TypeScript + Three.js**.
 
 ### Core User Journey
 1. **Landing Stage**: The visitor arrives at a cozy retro pixel-art 3D scene showing **5 closed glass jars filled with colorful folded paper notes** resting on wooden pixel shelves:
@@ -57,14 +57,7 @@ To parallelize implementation across **OpenCode Go (`opencode-go/deepseek-v4.1-f
 
 ---
 
-## 4. Static Hosting & Custom Domain Migration Path
+## 4. Static Hosting
 
-1. **Current State (Private Development & Testing)**:
-   - Repository `hadealahmad/jar-of-links` created as **private**.
-   - Vite configured with `base: './'` so static fetches (`./data/youtube.csv`, `./assets/...`) resolve cleanly under both `/jar-of-links/` and `/`.
-   - `.github/workflows/deploy.yml` runs `bun test` and `bun run build`, publishing `./dist` via `actions/deploy-pages@v4`.
-2. **Go-Live Checklist (When Real CSV Links Are Ready)**:
-   - Replace demo CSVs in `public/data/*.csv` (optionally run `bun run enrich`).
-   - Change repository visibility to **Public** (enabling free GitHub Pages hosting).
-   - Enable GitHub Pages source -> **GitHub Actions**.
-   - Add `public/CNAME` containing `jar.hadealahmad.com` and point DNS `CNAME` (`jar` -> `hadealahmad.github.io`).
+- Vite is configured with `base: './'` so static fetches (`./data/links.csv`, `./assets/...`) resolve cleanly on both root domains and subpaths.
+- `.github/workflows/deploy.yml` runs `bun test` and `bun run build`, publishing `./dist` via `actions/deploy-pages@v4`.

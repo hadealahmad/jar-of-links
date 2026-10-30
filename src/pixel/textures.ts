@@ -996,7 +996,7 @@ export function generateFallbackOgDataUrl(title: string, hostname: string, accen
   drawSparkle(ctx, 64, 14, accentBright);
   drawSparkle(ctx, 96, 21, accentBright);
 
-  const rawHost = (hostname || 'jar.hadealahmad.com').trim();
+  const rawHost = (hostname || 'link').trim();
   if (NON_ASCII_RE.test(rawHost)) {
     drawCrispFontText(ctx, rawHost, width / 2, 35, {
       maxWidth: width - 20,

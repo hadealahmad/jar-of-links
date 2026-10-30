@@ -2,6 +2,7 @@
   "name": "jar-of-links",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Retro pixel-art Three.js jar of links powered by a static url,type CSV",
   "scripts": {

@@ -1,9 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // Relative base ensures static assets and ./data/*.csv work identically on:
-  // 1) GitHub Pages subpath (https://hadealahmad.github.io/jar-of-links/)
-  // 2) Custom root domain later (https://jar.hadealahmad.com/)
+  // Relative base ensures static assets and ./data/links.csv work on both root domains and subpaths.
   base: './',
   server: {
     port: 5173,
