@@ -147,6 +147,166 @@ function fitPixelText(text: string, maxWidth: number, scale: number, letterSpaci
   return trimmed.length > 0 ? `${trimmed.trimEnd()}${ellipsis}` : ellipsis;
 }
 
+const CANVAS_ARABIC_FONT_STACK = '"Handjet Arabic", "Handjet", "Geeza Pro", Tahoma, sans-serif';
+
+/**
+ * Contextual glyph forms `[isolated, final, initial, medial]` mapped to codepoints
+ * present in `Handjet` (isolated forms stay at base `U+06xx`, joined forms use
+ * Unicode Arabic Presentation Forms-B/A `U+FE80–U+FEFC` / `U+FB50–U+FBFF`).
+ */
+type ArabicFormTuple = readonly [
+  isol: number,
+  fina: number | null,
+  init: number | null,
+  medi: number | null,
+];
+
+const ARABIC_JOINING_FORMS: Readonly<Record<number, ArabicFormTuple>> = {
+  0x0621: [0x0621, null, null, null], // ء
+  0x0622: [0x0622, 0xfe82, null, null], // آ
+  0x0623: [0x0623, 0xfe84, null, null], // أ
+  0x0624: [0x0624, 0xfe86, null, null], // ؤ
+  0x0625: [0x0625, 0xfe88, null, null], // إ
+  0x0626: [0x0626, 0xfe8a, 0xfe8b, 0xfe8c], // ئ
+  0x0627: [0x0627, 0xfe8e, null, null], // ا
+  0x0628: [0x0628, 0xfe90, 0xfe91, 0xfe92], // ب
+  0x0629: [0x0629, 0xfe94, null, null], // ة
+  0x062a: [0x062a, 0xfe96, 0xfe97, 0xfe98], // ت
+  0x062b: [0x062b, 0xfe9a, 0xfe9b, 0xfe9c], // ث
+  0x062c: [0x062c, 0xfe9e, 0xfe9f, 0xfea0], // ج
+  0x062d: [0x062d, 0xfea2, 0xfea3, 0xfea4], // ح
+  0x062e: [0x062e, 0xfea6, 0xfea7, 0xfea8], // خ
+  0x062f: [0x062f, 0xfeaa, null, null], // د
+  0x0630: [0x0630, 0xfeac, null, null], // ذ
+  0x0631: [0x0631, 0xfeae, null, null], // ر
+  0x0632: [0x0632, 0xfeb0, null, null], // ز
+  0x0633: [0x0633, 0xfeb2, 0xfeb3, 0xfeb4], // س
+  0x0634: [0x0634, 0xfeb6, 0xfeb7, 0xfeb8], // ش
+  0x0635: [0x0635, 0xfeba, 0xfebb, 0xfebc], // ص
+  0x0636: [0x0636, 0xfebe, 0xfebf, 0xfec0], // ض
+  0x0637: [0x0637, 0xfec2, 0xfec3, 0xfec4], // ط
+  0x0638: [0x0638, 0xfec6, 0xfec7, 0xfec8], // ظ
+  0x0639: [0x0639, 0xfeca, 0xfecb, 0xfecc], // ع
+  0x063a: [0x063a, 0xfece, 0xfecf, 0xfed0], // غ
+  0x0641: [0x0641, 0xfed2, 0xfed3, 0xfed4], // ف
+  0x0642: [0x0642, 0xfed6, 0xfed7, 0xfed8], // ق
+  0x0643: [0x0643, 0xfeda, 0xfedb, 0xfedc], // ك
+  0x0644: [0x0644, 0xfede, 0xfedf, 0xfee0], // ل
+  0x0645: [0x0645, 0xfee2, 0xfee3, 0xfee4], // م
+  0x0646: [0x0646, 0xfee6, 0xfee7, 0xfee8], // ن
+  0x0647: [0x0647, 0xfeea, 0xfeeb, 0xfeec], // ه
+  0x0648: [0x0648, 0xfeee, null, null], // و
+  0x0649: [0x0649, 0xfef0, null, null], // ى
+  0x064a: [0x064a, 0xfef2, 0xfef3, 0xfef4], // ي
+  0x0671: [0x0671, 0xfb51, null, null], // ٱ
+  0x067e: [0x067e, 0xfb57, 0xfb58, 0xfb59], // پ
+  0x0686: [0x0686, 0xfb7b, 0xfb7c, 0xfb7d], // چ
+  0x0698: [0x0698, 0xfb8b, null, null], // ژ
+  0x06a9: [0x06a9, 0xfb8f, 0xfb90, 0xfb91], // ک
+  0x06af: [0x06af, 0xfb93, 0xfb94, 0xfb95], // گ
+  0x06cc: [0x06cc, 0xfbfd, 0xfbfe, 0xfbff], // ی
+};
+
+const LAM_ALEF_LIGATURES: Readonly<Record<number, readonly [isol: number, fina: number]>> = {
+  0x0622: [0xfef5, 0xfef6], // لآ
+  0x0623: [0xfef7, 0xfef8], // لأ
+  0x0625: [0xfef9, 0xfefa], // لإ
+  0x0627: [0xfefb, 0xfefc], // لا
+};
+
+function isArabicTransparentMark(cp: number): boolean {
+  return (
+    (cp >= 0x0610 && cp <= 0x061a) ||
+    (cp >= 0x064b && cp <= 0x065f) ||
+    cp === 0x0670 ||
+    (cp >= 0x06d6 && cp <= 0x06ed)
+  );
+}
+
+function canArabicJoinLeft(cp: number): boolean {
+  if (cp === 0x0640 || cp === 0x200d) return true;
+  const forms = ARABIC_JOINING_FORMS[cp];
+  return Boolean(forms && forms[2] !== null);
+}
+
+function canArabicJoinRight(cp: number): boolean {
+  if (cp === 0x0640 || cp === 0x200d) return true;
+  const forms = ARABIC_JOINING_FORMS[cp];
+  return Boolean(forms && forms[1] !== null);
+}
+
+/**
+ * Pre-shapes Arabic words in logical RTL order into explicit contextual
+ * Unicode Presentation Forms (`U+FE80–U+FEFC`, including `Lam-Alef` ligatures).
+ *
+ * Safari / WebKit's CoreText Canvas 2D pipeline skips `GSUB` contextual joining
+ * when a web font omits the `arab` script tag or renders onto an offscreen canvas.
+ * Because `U+FE80–U+FEFC` retain BiDi class `AL` (Right-to-Left) and map directly
+ * in `Handjet`'s `cmap`, the shaped string renders identically in CoreText (Safari)
+ * and HarfBuzz (Chrome/Firefox).
+ */
+export function shapeArabicForCanvas(input: string): string {
+  if (!input || !ARABIC_RE.test(input)) return input;
+
+  const cps = Array.from(input.normalize('NFC'), (ch) => ch.codePointAt(0) ?? 0);
+  const out: number[] = [];
+  const len = cps.length;
+  let i = 0;
+
+  while (i < len) {
+    const cp = cps[i];
+    const forms = ARABIC_JOINING_FORMS[cp];
+    if (!forms) {
+      out.push(cp);
+      i += 1;
+      continue;
+    }
+
+    let prevIdx = i - 1;
+    while (prevIdx >= 0 && isArabicTransparentMark(cps[prevIdx])) {
+      prevIdx -= 1;
+    }
+    const joinsPrev =
+      prevIdx >= 0 && canArabicJoinLeft(cps[prevIdx]) && canArabicJoinRight(cp);
+
+    if (cp === 0x0644) {
+      let nextBaseIdx = i + 1;
+      const marks: number[] = [];
+      while (nextBaseIdx < len && isArabicTransparentMark(cps[nextBaseIdx])) {
+        marks.push(cps[nextBaseIdx]);
+        nextBaseIdx += 1;
+      }
+      const ligature = nextBaseIdx < len ? LAM_ALEF_LIGATURES[cps[nextBaseIdx]] : undefined;
+      if (ligature) {
+        out.push(joinsPrev ? ligature[1] : ligature[0]);
+        for (const mark of marks) out.push(mark);
+        i = nextBaseIdx + 1;
+        continue;
+      }
+    }
+
+    let nextIdx = i + 1;
+    while (nextIdx < len && isArabicTransparentMark(cps[nextIdx])) {
+      nextIdx += 1;
+    }
+    const joinsNext =
+      nextIdx < len && canArabicJoinLeft(cp) && canArabicJoinRight(cps[nextIdx]);
+
+    if (joinsPrev && joinsNext && forms[3] !== null) {
+      out.push(forms[3]);
+    } else if (joinsPrev && forms[1] !== null) {
+      out.push(forms[1]);
+    } else if (joinsNext && forms[2] !== null) {
+      out.push(forms[2]);
+    } else {
+      out.push(forms[0]);
+    }
+    i += 1;
+  }
+
+  return String.fromCodePoint(...out);
+}
+
 interface CrispFontOptions {
   maxWidth: number;
   fontSize: number;
@@ -158,9 +318,34 @@ interface CrispFontOptions {
   alphaThreshold?: number;
 }
 
+let sharedScratchCanvas: PixelCanvas | null = null;
+
+function acquireDomScratchCanvas(width: number, height: number, isArabic: boolean): PixelCanvas {
+  if (!sharedScratchCanvas) {
+    sharedScratchCanvas = createCanvas(width, height);
+    const el = sharedScratchCanvas.canvas;
+    el.setAttribute('aria-hidden', 'true');
+    el.style.cssText =
+      'position:fixed;left:-9999px;top:-9999px;width:0;height:0;visibility:hidden;pointer-events:none;letter-spacing:0;-webkit-font-smoothing:antialiased;font-variation-settings:"ELSH" 2,"ELGR" 1;';
+  }
+
+  const { canvas, ctx } = sharedScratchCanvas;
+  if (typeof document !== 'undefined' && document.body && !canvas.isConnected) {
+    document.body.appendChild(canvas);
+  }
+
+  canvas.width = width;
+  canvas.height = height;
+  canvas.dir = isArabic ? 'rtl' : 'ltr';
+  canvas.lang = isArabic ? 'ar' : 'en';
+  ctx.imageSmoothingEnabled = false;
+  return sharedScratchCanvas;
+}
+
 /**
- * Renders connected Arabic (or Unicode) strings using the Google Font `Handjet`
- * onto an offscreen canvas and quantizes alpha into hard 1x1 integer pixels.
+ * Renders connected Arabic (or Unicode) strings using `Handjet Arabic` / `Handjet`
+ * onto a DOM-attached RTL scratch canvas (working around WebKit Bug 169922 and
+ * CoreText's missing-`arab` GSUB handling) and quantizes alpha into hard 1x1 pixels.
  */
 function drawCrispFontText(
   ctx: CanvasRenderingContext2D,
@@ -174,32 +359,43 @@ function drawCrispFontText(
 
   const targetWidth = ctx.canvas.width;
   const targetHeight = ctx.canvas.height;
-  const { ctx: scratchCtx } = createCanvas(targetWidth, targetHeight);
+  const isArabic = ARABIC_RE.test(clean);
+  const { ctx: scratchCtx } = acquireDomScratchCanvas(targetWidth, targetHeight, isArabic);
 
   const weight = options.fontWeight ?? 700;
   const minSize = options.minFontSize ?? 10;
-  const isArabic = ARABIC_RE.test(clean);
 
   scratchCtx.direction = isArabic ? 'rtl' : 'ltr';
+  const extCtx = scratchCtx as CanvasRenderingContext2D & {
+    lang?: string;
+    letterSpacing?: string;
+  };
+  if ('lang' in extCtx) extCtx.lang = isArabic ? 'ar' : 'en';
+  if ('letterSpacing' in extCtx) extCtx.letterSpacing = '0px';
   scratchCtx.textAlign = 'center';
   scratchCtx.textBaseline = 'middle';
 
   let size = options.fontSize;
-  let display = clean;
+  let display = isArabic ? shapeArabicForCanvas(clean) : clean;
 
   while (size > minSize) {
-    scratchCtx.font = `${weight} ${size}px "Handjet", Tahoma, sans-serif`;
+    scratchCtx.font = `${weight} ${size}px ${CANVAS_ARABIC_FONT_STACK}`;
     if (scratchCtx.measureText(display).width <= options.maxWidth) break;
     size -= 1;
   }
 
-  scratchCtx.font = `${weight} ${size}px "Handjet", Tahoma, sans-serif`;
+  scratchCtx.font = `${weight} ${size}px ${CANVAS_ARABIC_FONT_STACK}`;
   if (scratchCtx.measureText(display).width > options.maxWidth) {
-    let shortened = display;
-    while (shortened.length > 1 && scratchCtx.measureText(`${shortened}…`).width > options.maxWidth) {
-      shortened = shortened.slice(0, -1);
+    const glyphs = Array.from(clean);
+    while (glyphs.length > 1) {
+      glyphs.pop();
+      const candidateRaw = `${glyphs.join('').trimEnd()}…`;
+      const candidate = isArabic ? shapeArabicForCanvas(candidateRaw) : candidateRaw;
+      if (scratchCtx.measureText(candidate).width <= options.maxWidth) {
+        display = candidate;
+        break;
+      }
     }
-    display = `${shortened.trimEnd()}…`;
   }
 
   scratchCtx.clearRect(0, 0, targetWidth, targetHeight);
@@ -207,7 +403,7 @@ function drawCrispFontText(
   scratchCtx.fillText(display, Math.round(centerX), Math.round(centerY));
 
   const data = scratchCtx.getImageData(0, 0, targetWidth, targetHeight).data;
-  const threshold = options.alphaThreshold ?? 112;
+  const threshold = options.alphaThreshold ?? 88;
 
   const stampMask = (fill: string, ox: number, oy: number): void => {
     ctx.fillStyle = fill;
@@ -415,7 +611,7 @@ function paintJarLabelCanvas(ctx: CanvasRenderingContext2D, config: JarConfig): 
       color: '#2D353A',
       highlightColor: '#FFFFFF',
       highlightOffset: 1,
-      alphaThreshold: 110,
+      alphaThreshold: 88,
     });
   } else {
     const text = rawLabel.toUpperCase();
@@ -441,14 +637,16 @@ export function createJarLabelTexture(config: JarConfig): THREE.CanvasTexture {
   const texture = createTexture(canvas);
 
   if (typeof document !== 'undefined' && document.fonts) {
+    const rawLabel = (config.shortLabel || config.label || '').trim();
+    const sample = shapeArabicForCanvas(rawLabel) || rawLabel;
     const repaint = (): void => {
       paintJarLabelCanvas(ctx, config);
       texture.needsUpdate = true;
     };
-    void document.fonts
-      .load('800 28px "Handjet"', config.shortLabel || config.label)
-      .then(repaint)
-      .catch(() => {});
+    void Promise.allSettled([
+      document.fonts.load('800 28px "Handjet Arabic"', sample),
+      document.fonts.load('800 28px "Handjet"', rawLabel),
+    ]).then(repaint);
     void document.fonts.ready.then(repaint).catch(() => {});
   }
 

@@ -10,10 +10,21 @@
    1. Full-bleed viewport reset & hadealahmad.com palette tokens
    -------------------------------------------------------------------------- */
 
+@font-face {
+  font-family: 'Handjet Arabic';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/handjet-arabic.woff2') format('woff2');
+  unicode-range:
+    U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E,
+    U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+
 :root {
   color-scheme: dark;
 
-  --font-pixel-ar: 'Handjet', 'Silkscreen', Tahoma, monospace;
+  --font-pixel-ar: 'Handjet Arabic', 'Handjet', 'Silkscreen', 'Geeza Pro', Tahoma, monospace;
 
   /* Exact Blocksy dark-mode palette from hadealahmad.com */
   --ha-primary: #0582ca;
@@ -65,6 +76,9 @@ html {
 body {
   font-family: var(--font-pixel-ar);
   font-variation-settings: 'ELSH' 2, 'ELGR' 1;
+  font-variant-ligatures: common-ligatures contextual;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   letter-spacing: 0;
   overscroll-behavior: none;
 }
