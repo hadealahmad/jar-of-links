@@ -441,7 +441,8 @@ body {
 .card-backdrop {
   position: absolute;
   inset: 0;
-  background-color: rgba(19, 21, 22, 0.8);
+  /* Light enough that the shelf and other jars stay visible behind the card. */
+  background-color: rgba(19, 21, 22, 0.52);
   /* Subtle geometric pattern-1.svg motif from hadealahmad.com */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath fill='none' stroke='%23C5CFD4' stroke-linecap='square' stroke-opacity='.06' stroke-width='.7' d='M15.986 4.186 4.1 16.072v.58L16.566 4.186Zm7.62 0 12.38 12.38v-.58l-11.8-11.8Zm12.38 19.248L23.52 35.9h.58l11.886-11.886ZM4.1 23.52v.58l11.8 11.8h.58z'/%3E%3C/svg%3E");
   cursor: pointer;
@@ -853,11 +854,9 @@ body {
 }
 
 .paper-open-badge {
-  position: absolute;
-  left: 6px;
-  bottom: 6px;
-  z-index: 4;
-  padding: 4px 8px;
+  flex: none;
+  margin-inline-start: auto;
+  padding: 2px 8px;
   font-family: var(--font-pixel-ar);
   font-variation-settings: 'ELSH' 2, 'ELGR' 1;
   font-size: 15px;

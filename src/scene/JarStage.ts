@@ -901,7 +901,7 @@ export class JarStage {
         active ? this.extractT : 0,
         active ? this.unfoldT : 0,
       );
-      runtime.mesh.setLabelOpacity(active ? 1 : 1 - selection * 0.9);
+      runtime.mesh.setLabelOpacity(active ? 1 : 1 - selection * 0.45);
       runtime.mesh.updateIdle(time, dt);
 
       runtime.shadowMaterial.opacity = active ? 0.36 * (1 - selection * 0.85) : 0.36;

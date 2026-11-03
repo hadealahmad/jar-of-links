@@ -185,8 +185,9 @@ function formatLinkCount(rawCount: number): string {
 
 /* --------------------------------------------------------- OG pixelation */
 
-const PIXEL_ART_MAX_WIDTH = 96;
-const POSTERIZE_LEVELS = 6;
+/* Wide enough that thumbnail text stays legible; gentle palette so colors stay true. */
+const PIXEL_ART_MAX_WIDTH = 160;
+const POSTERIZE_LEVELS = 14;
 
 /** 4×4 ordered Bayer matrix (0..15) for chunky retro dithering. */
 const BAYER_4X4: readonly (readonly number[])[] = [
@@ -371,7 +372,7 @@ export class HudOverlay {
     const openBadge = el('span', 'paper-open-badge', 'افتح الرابط \u2196');
     openBadge.setAttribute('aria-hidden', 'true');
 
-    ogFrame.append(this.ogLoading, this.ogImg, this.ogCanvas, openBadge);
+    ogFrame.append(this.ogLoading, this.ogImg, this.ogCanvas);
 
     const meta = el('div', 'paper-meta');
     this.faviconEl = el('img', 'paper-favicon');
@@ -382,7 +383,8 @@ export class HudOverlay {
     this.faviconEl.referrerPolicy = 'no-referrer';
     this.faviconEl.hidden = true;
     this.hostEl = el('span', 'paper-host', '');
-    meta.append(this.faviconEl, this.hostEl);
+    /* Lives in the meta row so it never covers the preview image. */
+    meta.append(this.faviconEl, this.hostEl, openBadge);
 
     this.titleEl = el('h2', 'paper-title', '');
     this.titleEl.id = titleId;
@@ -790,7 +792,7 @@ export class HudOverlay {
 
     const width = PIXEL_ART_MAX_WIDTH;
     const ratio = probe.naturalHeight / probe.naturalWidth;
-    const height = Math.max(24, Math.min(140, Math.round(width * ratio)));
+    const height = Math.max(24, Math.min(240, Math.round(width * ratio)));
 
     this.ogCanvas.width = width;
     this.ogCanvas.height = height;
@@ -821,7 +823,8 @@ export class HudOverlay {
     this.ogFrame.classList.remove('has-pixel-art', 'is-cors-blocked');
     this.ogCanvas.classList.remove('is-loaded');
 
-    const ctx = this.ogCanvas.getContext('2d');
+    // Same options as renderPixelArt: the first getContext call fixes them for good.
+    const ctx = this.ogCanvas.getContext('2d', { willReadFrequently: true });
     if (ctx) ctx.clearRect(0, 0, this.ogCanvas.width, this.ogCanvas.height);
   }
 
