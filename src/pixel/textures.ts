@@ -600,18 +600,18 @@ function paintJarLabelCanvas(ctx: CanvasRenderingContext2D, config: JarConfig): 
   }
 
   const rawLabel = (config.shortLabel || config.label || '').trim();
-  const available = LABEL_WIDTH - frame * 2 - 12;
+  const available = LABEL_WIDTH - frame * 2 - 8;
 
   if (NON_ASCII_RE.test(rawLabel)) {
+    // Big, dark, single-pass glyphs: the label is minified ~2x on screen, so thin
+    // strokes, i'jam dots and a 1px offset highlight would otherwise break apart.
     drawCrispFontText(ctx, rawLabel, LABEL_WIDTH / 2, LABEL_HEIGHT / 2 + 1, {
       maxWidth: available,
-      fontSize: config.id === 'all' ? 31 : 27,
-      minFontSize: 16,
+      fontSize: config.id === 'all' ? 44 : 40,
+      minFontSize: 20,
       fontWeight: 800,
-      color: '#2D353A',
-      highlightColor: '#FFFFFF',
-      highlightOffset: 1,
-      alphaThreshold: 88,
+      color: '#131516',
+      alphaThreshold: 70,
     });
   } else {
     const text = rawLabel.toUpperCase();
@@ -635,6 +635,12 @@ export function createJarLabelTexture(config: JarConfig): THREE.CanvasTexture {
   const { canvas, ctx } = createCanvas(LABEL_WIDTH, LABEL_HEIGHT);
   paintJarLabelCanvas(ctx, config);
   const texture = createTexture(canvas);
+  // Labels are drawn far smaller than their 128x64 canvas in the low-res render.
+  // Nearest minification drops whole texel rows/columns (losing dots and strokes),
+  // so average down through mipmaps instead; magnification stays nearest.
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.anisotropy = 4;
 
   if (typeof document !== 'undefined' && document.fonts) {
     const rawLabel = (config.shortLabel || config.label || '').trim();

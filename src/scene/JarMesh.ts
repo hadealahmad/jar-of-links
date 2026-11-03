@@ -25,6 +25,19 @@ const NECK_RADIUS = 0.37;
 const NECK_HEIGHT = 0.28;
 const RIM_Y = BODY_HEIGHT + SHOULDER_HEIGHT + NECK_HEIGHT; // 1.89
 
+/** Draw order: back glass (0) → outline (0) → papers (1) → front glass (2) → label (20). */
+const BACK_GLASS_OPACITY = 0.18;
+const OUTLINE_SCALE = 1.06;
+const OUTLINE_MAX_OPACITY = 0.55;
+const HOVER_LIFT = 0.09;
+const HOVER_WOBBLE_RAD = 0.05;
+const HOVER_WOBBLE_HZ = 3;
+const CORK_RATTLE_HZ = 10;
+const CORK_RATTLE_Y = 0.01;
+const CORK_RATTLE_ROT = 0.04;
+/** The note under the hero slip is scaled up a touch so the pile has a clear top. */
+const TOP_NOTE_SCALE = 1.14;
+
 const MIN_NOTE_Y = 0.14;
 const MAX_NOTE_Y = 1.48;
 const GOLDEN_ANGLE = 2.399963229728653;
@@ -101,6 +114,8 @@ interface PaperNote {
   mesh: THREE.Mesh;
   base: THREE.Euler;
   phase: number;
+  /** Unscaled size of this slip; the top of the pile gets a small boost. */
+  baseScale: number;
 }
 
 /**
@@ -127,6 +142,17 @@ export class JarMesh {
   private readonly papers: PaperNote[] = [];
   private labelMesh!: THREE.Mesh;
   private labelMaterial!: THREE.MeshBasicMaterial;
+
+  /** Inside-out, slightly enlarged glass shell used as the hover silhouette. */
+  private readonly outlineGroup = new THREE.Group();
+  private outlineMaterial!: THREE.MeshBasicMaterial;
+
+  /** Snapshot of the OS motion preference, kept live via a media-query listener. */
+  private reducedMotion = false;
+  private motionQuery: MediaQueryList | null = null;
+  private readonly handleMotionChange = (event: MediaQueryListEvent): void => {
+    this.reducedMotion = event.matches;
+  };
 
   private readonly paperTextures = new Map<string, THREE.Texture>();
   private readonly paperMaterials = new Map<string, THREE.MeshLambertMaterial>();
@@ -159,7 +185,14 @@ export class JarMesh {
     this.group.userData.jarId = config.id;
     this.group.add(this.visualRoot);
 
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      this.reducedMotion = this.motionQuery.matches;
+      this.motionQuery.addEventListener('change', this.handleMotionChange);
+    }
+
     this.buildGlass();
+    this.buildOutline();
     this.buildLabel();
     this.buildHighlights();
     this.buildInteriorPapers();
@@ -190,48 +223,67 @@ export class JarMesh {
       side: THREE.FrontSide,
     });
 
-    const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(
-        BODY_TOP_RADIUS,
-        BODY_BOTTOM_RADIUS,
-        BODY_HEIGHT,
-        10,
-        1,
-        true,
-      ),
-      glassMaterial,
-    );
-    body.position.y = BODY_HEIGHT / 2;
-    body.renderOrder = 2;
-    this.glassGroup.add(body);
+    // Second pass over the same silhouette, seen from the inside. The open
+    // cylinders only ever show their front faces, which reads as a paper-thin
+    // sheet; this darker back wall gives the glass visible depth behind the pile.
+    const backMaterial = glassMaterial.clone();
+    backMaterial.side = THREE.BackSide;
+    backMaterial.opacity = BACK_GLASS_OPACITY;
+    backMaterial.color.multiplyScalar(0.62);
+    backMaterial.emissive.multiplyScalar(0.5);
+    backMaterial.shininess = 10;
 
-    const shoulder = new THREE.Mesh(
-      new THREE.CylinderGeometry(
-        NECK_RADIUS,
-        BODY_TOP_RADIUS,
-        SHOULDER_HEIGHT,
-        10,
-        1,
-        true,
-      ),
-      glassMaterial,
+    const bodyGeometry = new THREE.CylinderGeometry(
+      BODY_TOP_RADIUS,
+      BODY_BOTTOM_RADIUS,
+      BODY_HEIGHT,
+      10,
+      1,
+      true,
     );
-    shoulder.position.y = BODY_HEIGHT + SHOULDER_HEIGHT / 2;
-    shoulder.renderOrder = 2;
-    this.glassGroup.add(shoulder);
-
-    const neck = new THREE.Mesh(
-      new THREE.CylinderGeometry(NECK_RADIUS, NECK_RADIUS, NECK_HEIGHT, 10, 1, true),
-      glassMaterial,
+    const shoulderGeometry = new THREE.CylinderGeometry(
+      NECK_RADIUS,
+      BODY_TOP_RADIUS,
+      SHOULDER_HEIGHT,
+      10,
+      1,
+      true,
     );
-    neck.position.y = BODY_HEIGHT + SHOULDER_HEIGHT + NECK_HEIGHT / 2;
-    neck.renderOrder = 2;
-    this.glassGroup.add(neck);
+    const neckGeometry = new THREE.CylinderGeometry(
+      NECK_RADIUS,
+      NECK_RADIUS,
+      NECK_HEIGHT,
+      10,
+      1,
+      true,
+    );
 
+    const addShell = (material: THREE.Material, renderOrder: number): void => {
+      const body = new THREE.Mesh(bodyGeometry, material);
+      body.position.y = BODY_HEIGHT / 2;
+      body.renderOrder = renderOrder;
+      this.glassGroup.add(body);
+
+      const shoulder = new THREE.Mesh(shoulderGeometry, material);
+      shoulder.position.y = BODY_HEIGHT + SHOULDER_HEIGHT / 2;
+      shoulder.renderOrder = renderOrder;
+      this.glassGroup.add(shoulder);
+
+      const neck = new THREE.Mesh(neckGeometry, material);
+      neck.position.y = BODY_HEIGHT + SHOULDER_HEIGHT + NECK_HEIGHT / 2;
+      neck.renderOrder = renderOrder;
+      this.glassGroup.add(neck);
+    };
+
+    // Back wall first so the notes (renderOrder 1) sit inside the glass volume.
+    addShell(backMaterial, 0);
+    addShell(glassMaterial, 2);
+
+    // Thicker lip at the rim: its silhouette survives the 1/3-resolution pass.
     const rimMaterial = glassMaterial.clone();
     rimMaterial.opacity = 0.48;
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(NECK_RADIUS, 0.045, 4, 10),
+      new THREE.TorusGeometry(NECK_RADIUS, 0.06, 4, 10),
       rimMaterial,
     );
     rim.rotation.x = Math.PI / 2;
@@ -250,7 +302,85 @@ export class JarMesh {
     base.renderOrder = 3;
     this.glassGroup.add(base);
 
+    // Dark ring where the wall meets the base: the bottom "glass thickness".
+    const thicknessMaterial = glassMaterial.clone();
+    thicknessMaterial.color.multiplyScalar(0.35);
+    thicknessMaterial.emissive.multiplyScalar(0.4);
+    thicknessMaterial.opacity = 0.55;
+    thicknessMaterial.side = THREE.DoubleSide;
+    const thickness = new THREE.Mesh(
+      new THREE.TorusGeometry(BODY_BOTTOM_RADIUS - 0.012, 0.035, 4, 10),
+      thicknessMaterial,
+    );
+    thickness.rotation.x = Math.PI / 2;
+    thickness.position.y = 0.088;
+    thickness.renderOrder = 3;
+    this.glassGroup.add(thickness);
+
     this.visualRoot.add(this.glassGroup);
+  }
+
+  /**
+   * Hover silhouette: an inside-out copy of the glass shell, slightly enlarged.
+   * Only its back faces show, so it reads as an outline hugging the jar edge
+   * rather than a flat overlay. Kept fully transparent (and hidden) at rest.
+   */
+  private buildOutline(): void {
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x38b6ff,
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    });
+    this.outlineMaterial = material;
+
+    const group = this.outlineGroup;
+    group.name = 'jar-hover-outline';
+    group.scale.setScalar(OUTLINE_SCALE);
+    group.visible = false;
+
+    const shells: THREE.Mesh[] = [
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          BODY_TOP_RADIUS,
+          BODY_BOTTOM_RADIUS,
+          BODY_HEIGHT,
+          10,
+          1,
+          true,
+        ),
+        material,
+      ),
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          NECK_RADIUS,
+          BODY_TOP_RADIUS,
+          SHOULDER_HEIGHT,
+          10,
+          1,
+          true,
+        ),
+        material,
+      ),
+      new THREE.Mesh(
+        new THREE.CylinderGeometry(NECK_RADIUS, NECK_RADIUS, NECK_HEIGHT, 10, 1, true),
+        material,
+      ),
+    ];
+
+    shells[0].position.y = BODY_HEIGHT / 2;
+    shells[1].position.y = BODY_HEIGHT + SHOULDER_HEIGHT / 2;
+    shells[2].position.y = BODY_HEIGHT + SHOULDER_HEIGHT + NECK_HEIGHT / 2;
+
+    for (const shell of shells) {
+      shell.renderOrder = 0;
+      group.add(shell);
+    }
+
+    this.visualRoot.add(group);
   }
 
   private buildLabel(): void {
@@ -295,6 +425,7 @@ export class JarMesh {
     });
 
     const makeStrip = (
+      stripMaterial: THREE.Material,
       radius: number,
       height: number,
       y: number,
@@ -303,7 +434,7 @@ export class JarMesh {
     ): THREE.Mesh => {
       const strip = new THREE.Mesh(
         new THREE.CylinderGeometry(radius, radius, height, 2, 1, true, start, length),
-        material,
+        stripMaterial,
       );
       strip.position.y = y;
       strip.renderOrder = 15;
@@ -311,11 +442,26 @@ export class JarMesh {
     };
 
     // Long specular streak on the front-left edge.
-    this.visualRoot.add(makeStrip(0.716, 1.05, 0.68, -1.0, 0.11));
+    this.visualRoot.add(makeStrip(material, 0.716, 1.05, 0.68, -1.0, 0.11));
     // Short companion glint further up the body.
-    this.visualRoot.add(makeStrip(0.714, 0.42, 1.02, -0.7, 0.05));
+    this.visualRoot.add(makeStrip(material, 0.714, 0.42, 1.02, -0.7, 0.05));
     // Tiny neck glint.
-    this.visualRoot.add(makeStrip(0.382, 0.18, 1.75, -0.85, 0.09));
+    this.visualRoot.add(makeStrip(material, 0.382, 0.18, 1.75, -0.85, 0.09));
+
+    // Cool cerulean rim light down the front-right edge. Pairs with the white
+    // left glints and gives the round silhouette contrast at low resolution.
+    const rimLightMaterial = new THREE.MeshBasicMaterial({
+      color: 0x38b6ff,
+      transparent: true,
+      opacity: 0.25,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    this.visualRoot.add(makeStrip(rimLightMaterial, 0.717, 1.02, 0.66, 0.9, 0.09));
+    this.visualRoot.add(makeStrip(rimLightMaterial, 0.714, 0.34, 1.02, 1.24, 0.05));
+
     // Rim and base edge catches (softer than the body glints).
     const softMaterial = material.clone();
     softMaterial.opacity = 0.32;
@@ -348,16 +494,26 @@ export class JarMesh {
     return texture;
   }
 
-  private paperMaterial(color: string): THREE.MeshLambertMaterial {
-    let material = this.paperMaterials.get(color);
+  /**
+   * Shared paper material cache keyed by color + shade. Shade `1` lifts a slip
+   * with a stronger emissive, shade `-1` darkens it so the pile reads as a mix
+   * of light and shadow rather than one flat tone.
+   */
+  private paperMaterial(color: string, shade = 0): THREE.MeshLambertMaterial {
+    const key = `${color}|${shade}`;
+    let material = this.paperMaterials.get(key);
     if (!material) {
+      const base = new THREE.Color(color);
+      const emissiveStrength = shade < 0 ? 0.12 : shade > 0 ? 0.3 : 0.22;
+      const tint = shade < 0 ? 0.84 : 1;
       material = new THREE.MeshLambertMaterial({
         map: this.paperTexture(color),
+        color: new THREE.Color(tint, tint, tint),
         side: THREE.DoubleSide,
         flatShading: true,
-        emissive: new THREE.Color(color).multiplyScalar(0.22),
+        emissive: base.multiplyScalar(emissiveStrength),
       });
-      this.paperMaterials.set(color, material);
+      this.paperMaterials.set(key, material);
     }
     return material;
   }
@@ -376,7 +532,9 @@ export class JarMesh {
 
     for (let i = 0; i < MAX_INTERIOR_NOTES; i += 1) {
       const color = colors[Math.floor(random() * colors.length) % colors.length];
-      const note = new THREE.Mesh(geometry, this.paperMaterial(color));
+      // Alternating bright/dark variants of the same paper tone add cheap variety.
+      const shade = random() < 0.42 ? -1 : 1;
+      const note = new THREE.Mesh(geometry, this.paperMaterial(color, shade));
 
       const s = (i + 0.5) / MAX_INTERIOR_NOTES;
       const y = clamp(
@@ -411,8 +569,14 @@ export class JarMesh {
       );
       note.rotation.copy(base);
       note.scale.setScalar(noteScale);
+      note.renderOrder = 1;
 
-      this.papers.push({ mesh: note, base, phase: random() * Math.PI * 2 });
+      this.papers.push({
+        mesh: note,
+        base,
+        phase: random() * Math.PI * 2,
+        baseScale: noteScale,
+      });
       this.papersGroup.add(note);
     }
 
@@ -528,7 +692,11 @@ export class JarMesh {
     this.hasItems = targetCount > 0;
 
     for (let i = 0; i < this.papers.length; i += 1) {
-      this.papers[i].mesh.visible = i < targetCount;
+      const note = this.papers[i];
+      const revealed = i < targetCount;
+      note.mesh.visible = revealed;
+      const isTopNote = revealed && i === targetCount - 1;
+      note.mesh.scale.setScalar(note.baseScale * (isTopNote ? TOP_NOTE_SCALE : 1));
     }
 
     const pileTopY =
@@ -542,7 +710,7 @@ export class JarMesh {
   }
 
   setHovered(hovered: boolean): void {
-    this.hoverTarget = hovered ? 0.09 : 0;
+    this.hoverTarget = hovered ? HOVER_LIFT : 0;
   }
 
   /** Fades the parchment label while another jar takes the spotlight. */
@@ -553,11 +721,13 @@ export class JarMesh {
   }
 
   updateIdle(timeSec: number, dt: number): void {
-    // Hover lift settles smoothly.
+    // Hover lift settles smoothly; its normalized value drives every hover cue.
     const liftSpeed = Math.min(1, Math.max(0, dt) * 12);
     this.hoverLift += (this.hoverTarget - this.hoverLift) * liftSpeed;
+    const hoverProgress = clamp01(this.hoverLift / HOVER_LIFT);
+    const reduced = this.reducedMotion;
 
-    const bob = Math.sin(timeSec * 1.6 + this.seed * 9) * 0.014;
+    const bob = reduced ? 0 : Math.sin(timeSec * 1.6 + this.seed * 9) * 0.014;
 
     const elapsed = timeSec - this.shakeStart;
     let amp = 0;
@@ -571,8 +741,21 @@ export class JarMesh {
       amp === 0 ? 0 : Math.abs(Math.sin(timeSec * 38 + this.seed * 11)) * 0.03 * amp;
     const roll = amp === 0 ? 0 : Math.sin(timeSec * 31 + this.seed * 17) * 0.07 * amp;
 
+    // Gentle 3 Hz wobble layered on the lift, fading with the hover itself.
+    const hoverWobble =
+      reduced || hoverProgress < 0.001
+        ? 0
+        : Math.sin(timeSec * Math.PI * 2 * HOVER_WOBBLE_HZ + this.seed * 8) *
+          HOVER_WOBBLE_RAD *
+          hoverProgress;
+
     this.visualRoot.position.set(shakeX, this.hoverLift + bob + shakeY, 0);
-    this.visualRoot.rotation.z = roll;
+    this.visualRoot.rotation.z = roll + hoverWobble;
+
+    // Hover silhouette glow (still shown when reduced motion is requested).
+    const outlineOpacity = hoverProgress * OUTLINE_MAX_OPACITY;
+    this.outlineMaterial.opacity = outlineOpacity;
+    this.outlineGroup.visible = outlineOpacity > 0.01;
 
     // Jostle visible folded notes inside the jar.
     for (let i = 0; i < this.visibleNoteCount; i += 1) {
@@ -596,16 +779,26 @@ export class JarMesh {
         this.corkBaseRotZ +
         Math.sin(timeSec * 1.7 + this.seed * 5) * 0.06 * this.corkT;
     } else {
-      this.corkGroup.position.y = this.corkBaseY;
-      this.corkGroup.rotation.z = this.corkBaseRotZ;
+      // Stepped (8-bit) cork rattle while the closed jar is hovered.
+      let rattleStep = 0;
+      if (!reduced && hoverProgress > 0.001) {
+        rattleStep =
+          Math.round(
+            Math.sin(timeSec * Math.PI * 2 * CORK_RATTLE_HZ + this.seed * 13) * 2,
+          ) / 2;
+      }
+      this.corkGroup.position.y =
+        this.corkBaseY + rattleStep * CORK_RATTLE_Y * hoverProgress;
+      this.corkGroup.rotation.z =
+        this.corkBaseRotZ + rattleStep * CORK_RATTLE_ROT * hoverProgress;
     }
 
     // Tiny sway while the hero note is tucked inside a non-empty jar.
     if (this.hasItems && this.extractT < 0.001 && this.unfoldT < 0.001) {
-      this.heroPaperGroup.rotation.z =
-        this.heroBaseRotZ + Math.sin(timeSec * 1.15 + this.seed * 6) * 0.03;
-      this.heroPaperGroup.position.y =
-        this.heroBaseY + Math.sin(timeSec * 1.6 + this.seed * 3) * 0.008;
+      const sway = reduced ? 0 : Math.sin(timeSec * 1.15 + this.seed * 6) * 0.03;
+      const drift = reduced ? 0 : Math.sin(timeSec * 1.6 + this.seed * 3) * 0.008;
+      this.heroPaperGroup.rotation.z = this.heroBaseRotZ + sway;
+      this.heroPaperGroup.position.y = this.heroBaseY + drift;
     }
   }
 
@@ -677,6 +870,8 @@ export class JarMesh {
     this.shakeStart = -1000;
     this.visualRoot.position.set(0, 0, 0);
     this.visualRoot.rotation.set(0, 0, 0);
+    this.outlineMaterial.opacity = 0;
+    this.outlineGroup.visible = false;
     this.setCorkOpenProgress(0);
     this.setPaperState(0, 0);
     this.setLabelOpacity(1);
@@ -686,6 +881,9 @@ export class JarMesh {
   }
 
   dispose(): void {
+    this.motionQuery?.removeEventListener('change', this.handleMotionChange);
+    this.motionQuery = null;
+
     this.group.traverse((object) => {
       const mesh = object as THREE.Mesh;
       if (!mesh.isMesh) return;

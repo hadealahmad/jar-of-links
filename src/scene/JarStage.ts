@@ -9,12 +9,25 @@ import {
   JAR_PAPER_TOP,
 } from './JarMesh';
 import { createWoodShelfTexture } from '../pixel/textures';
+import { createBackdropTexture, createGlowTexture } from '../pixel/backdrop';
 
 const V_FOV_DEG = 40;
 const FOCAL_SCALE = 1.08;
 const FOCAL_Z_RATIO = 0.15;
 const FOCAL_Z_MIN = 0.8;
 const FOCAL_Z_MAX = 4.0;
+
+/** Target width of the low-res framebuffer, in pixel-art pixels. */
+const PIXEL_TARGET_WIDTH_MOBILE = 400;
+const PIXEL_TARGET_WIDTH_DESKTOP = 640;
+const MOBILE_LAYOUT_MAX_CSS_WIDTH = 640;
+
+/** Backdrop and glow sit far behind the jars (stars live between -20 and -8). */
+const BACKDROP_Z = -22;
+const GLOW_Z = -21.6;
+
+/** Idle scenes render at 30fps; animations and hover render at full rate. */
+const IDLE_FRAME_INTERVAL = 1 / 30;
 
 /** Exact dark-mode body background of https://hadealahmad.com (--theme-palette-color-7) */
 const STAGE_BG_HEX = 0x1a1d1e;
@@ -72,10 +85,10 @@ interface StageLayout {
 }
 
 interface Star {
-  mesh: THREE.Mesh;
-  material: THREE.MeshBasicMaterial;
+  color: THREE.Color;
   baseX: number;
   baseY: number;
+  z: number;
   baseOpacity: number;
   size: number;
   phase: number;
@@ -166,7 +179,14 @@ export class JarStage {
   private readonly hitMeshes: THREE.Mesh[] = [];
 
   private readonly stars: Star[] = [];
+  private starMesh: THREE.InstancedMesh | null = null;
   private readonly starGeometry = new THREE.BoxGeometry(1, 1, 1);
+  private readonly starDummy = new THREE.Object3D();
+  private readonly starTint = new THREE.Color();
+  private readonly stageBgColor = new THREE.Color(STAGE_BG_HEX);
+  private readonly backdropGeometry = new THREE.PlaneGeometry(1, 1);
+  private backdropMesh: THREE.Mesh | null = null;
+  private glowMesh: THREE.Mesh | null = null;
   private readonly shelfGeometry = new THREE.BoxGeometry(1, 1, 1);
   private readonly shelfMeshes: THREE.Mesh[] = [];
   private readonly shadowGeometry = new THREE.CircleGeometry(1, 12);
@@ -191,7 +211,11 @@ export class JarStage {
 
   private rafId = 0;
   private lastTime = 0;
+  private lastRenderAt = 0;
   private resizeObserver: ResizeObserver | null = null;
+  private dprQuery: MediaQueryList | null = null;
+  private motionQuery: MediaQueryList | null = null;
+  private prefersReducedMotion = false;
 
   constructor(canvas: HTMLCanvasElement, callbacks: JarStageCallbacks) {
     this.canvas = canvas;
@@ -201,15 +225,17 @@ export class JarStage {
       canvas,
       antialias: false,
       alpha: false,
-      powerPreference: 'high-performance',
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.setPixelRatio(1);
     this.renderer.setClearColor(STAGE_BG_HEX, 1);
 
-    this.canvas.style.width = '100%';
-    this.canvas.style.height = '100%';
+    this.canvas.style.position = 'absolute';
+    this.canvas.style.inset = 'auto';
+    // Guard against the stylesheet's `inset: 0` in RTL over-constrained layouts.
+    this.canvas.style.right = 'auto';
+    this.canvas.style.bottom = 'auto';
     this.canvas.style.imageRendering = 'pixelated';
     this.canvas.style.touchAction = 'none';
     this.canvas.style.cursor = 'default';
@@ -220,6 +246,7 @@ export class JarStage {
     this.camera = new THREE.PerspectiveCamera(V_FOV_DEG, 1, 0.1, 200);
 
     this.setupLights();
+    this.setupBackdrop();
     this.setupStars();
     this.setupShelves();
     this.setupJars();
@@ -261,44 +288,82 @@ export class JarStage {
     this.scene.add(cyanGlow);
   }
 
+  private setupBackdrop(): void {
+    const backdropMaterial = new THREE.MeshBasicMaterial({
+      map: createBackdropTexture(),
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const backdrop = new THREE.Mesh(this.backdropGeometry, backdropMaterial);
+    backdrop.position.z = BACKDROP_Z;
+    backdrop.renderOrder = -20;
+    this.scene.add(backdrop);
+    this.backdropMesh = backdrop;
+
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      map: createGlowTexture(),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+      opacity: 0.55,
+    });
+    const glow = new THREE.Mesh(this.backdropGeometry, glowMaterial);
+    glow.position.z = GLOW_Z;
+    glow.renderOrder = -19;
+    this.scene.add(glow);
+    this.glowMesh = glow;
+  }
+
   private setupStars(): void {
     const random = mulberry32(0x51a7c0de);
     // Cool cerulean, sky cyan, slate-mist, and crisp off-white pixel motes
     const colors = [0x0582ca, 0x38b6ff, 0xc5cfd4, 0xedf1f2];
 
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const mesh = new THREE.InstancedMesh(this.starGeometry, material, 45);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.renderOrder = -10;
+    mesh.frustumCulled = false;
+
+    const dummy = this.starDummy;
     for (let i = 0; i < 45; i += 1) {
-      const material = new THREE.MeshBasicMaterial({
-        color: colors[i % colors.length],
-        transparent: true,
-        opacity: 0.45,
-        depthWrite: false,
-        toneMapped: false,
-      });
-      const mesh = new THREE.Mesh(this.starGeometry, material);
-
       const size = 0.07 + random() * 0.12;
-      const baseX = (random() - 0.5) * 30;
-      const baseY = -6 + random() * 16;
-      const z = -20 + random() * 12;
-
-      mesh.scale.setScalar(size);
-      mesh.position.set(baseX, baseY, z);
-      mesh.renderOrder = -10;
-
-      this.scene.add(mesh);
-      this.stars.push({
-        mesh,
-        material,
-        baseX,
-        baseY,
+      const star: Star = {
+        color: new THREE.Color(colors[i % colors.length]),
+        baseX: (random() - 0.5) * 30,
+        baseY: -6 + random() * 16,
+        z: -20 + random() * 12,
         baseOpacity: 0.28 + random() * 0.38,
         size,
         phase: random() * Math.PI * 2,
         speed: 0.5 + random() * 1.4,
         driftSpeed: 0.08 + random() * 0.18,
         driftAmp: 0.15 + random() * 0.35,
-      });
+      };
+      this.stars.push(star);
+
+      dummy.position.set(star.baseX, star.baseY, star.z);
+      dummy.scale.setScalar(size);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      mesh.setColorAt(i, star.color);
     }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) {
+      mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+      mesh.instanceColor.needsUpdate = true;
+    }
+
+    this.scene.add(mesh);
+    this.starMesh = mesh;
   }
 
   private setupShelves(): void {
@@ -357,22 +422,36 @@ export class JarStage {
   // ---------------------------------------------------------------------------
 
   resize(): void {
-    const width = this.canvas.clientWidth || window.innerWidth || 1;
-    const height = this.canvas.clientHeight || window.innerHeight || 1;
-    if (width < 2 || height < 2) return;
+    const parent = this.canvas.parentElement;
+    const cssWidth = parent?.clientWidth || window.innerWidth || 1;
+    const cssHeight = parent?.clientHeight || window.innerHeight || 1;
+    if (cssWidth < 2 || cssHeight < 2) return;
 
-    const pixelStep = width < 640 ? 2 : 3;
+    const dpr = window.devicePixelRatio || 1;
+    const targetWidth =
+      cssWidth < MOBILE_LAYOUT_MAX_CSS_WIDTH
+        ? PIXEL_TARGET_WIDTH_MOBILE
+        : PIXEL_TARGET_WIDTH_DESKTOP;
+
+    // One "retro" pixel spans `step` device pixels, so every scene pixel is an
+    // exact integer number of device pixels wide and tall (no shimmering).
+    const step = Math.max(1, Math.round((cssWidth * dpr) / targetWidth));
+    const renderW = Math.max(1, Math.floor((cssWidth * dpr) / step));
+    const renderH = Math.max(1, Math.floor((cssHeight * dpr) / step));
+
     this.renderer.setPixelRatio(1);
-    this.renderer.setSize(
-      Math.max(200, Math.floor(width / pixelStep)),
-      Math.max(200, Math.floor(height / pixelStep)),
-      false,
-    );
+    this.renderer.setSize(renderW, renderH, false);
 
-    this.canvas.style.width = '100%';
-    this.canvas.style.height = '100%';
+    // Size the element to exactly renderW*step x renderH*step device pixels and
+    // centre the (at most a few px) leftover in the parent.
+    const displayW = (renderW * step) / dpr;
+    const displayH = (renderH * step) / dpr;
+    this.canvas.style.width = `${displayW}px`;
+    this.canvas.style.height = `${displayH}px`;
+    this.canvas.style.left = `${Math.max(0, (cssWidth - displayW) / 2)}px`;
+    this.canvas.style.top = `${Math.max(0, (cssHeight - displayH) / 2)}px`;
 
-    this.updateLayout(width, height);
+    this.updateLayout(renderW, renderH);
   }
 
   private updateLayout(width: number, height: number): void {
@@ -412,6 +491,8 @@ export class JarStage {
     this.camera.lookAt(0, layout.centerY, 0);
     this.camera.updateProjectionMatrix();
 
+    this.layoutBackdrop(layout, aspect, vTan);
+
     for (const runtime of this.jarList) {
       const slot = layout.slots[runtime.config.id];
       runtime.slot.set(slot.x, slot.y, slot.z);
@@ -431,6 +512,37 @@ export class JarStage {
         0.62 * runtime.config.scale,
         1,
       );
+    }
+  }
+
+  /** Sizes the far backdrop plane so it exactly fills the frustum at its depth. */
+  private layoutBackdrop(layout: StageLayout, aspect: number, vTan: number): void {
+    const backdropDistance = Math.max(0.001, this.cameraZ - BACKDROP_Z);
+    const halfHeight = vTan * backdropDistance;
+    const halfWidth = halfHeight * aspect;
+
+    if (this.backdropMesh) {
+      this.backdropMesh.position.set(0, layout.centerY, BACKDROP_Z);
+      this.backdropMesh.scale.set(halfWidth * 2 * 1.02, halfHeight * 2 * 1.02, 1);
+    }
+
+    if (this.glowMesh) {
+      // Light pool behind the centre jar: anchored to its shelf, just above it.
+      const centerSlotY = layout.slots.all.y;
+      let shelfY = centerSlotY;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (const shelf of layout.shelves) {
+        const shelfDistance = Math.abs(shelf.y - centerSlotY);
+        if (shelfDistance < bestDistance) {
+          bestDistance = shelfDistance;
+          shelfY = shelf.y;
+        }
+      }
+
+      const glowWidth = Math.max(3.2, layout.width * 0.45);
+      const glowHeight = glowWidth * 0.62;
+      this.glowMesh.position.set(0, shelfY + glowHeight * 0.28, GLOW_Z);
+      this.glowMesh.scale.set(glowWidth, glowHeight, 1);
     }
   }
 
@@ -459,15 +571,52 @@ export class JarStage {
     this.canvas.addEventListener('pointerleave', this.onPointerLeave);
     this.canvas.addEventListener('pointercancel', this.onPointerCancel);
     window.addEventListener('resize', this.onWindowResize);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
 
+    // The canvas is no longer 100% of the parent, so watch the parent instead.
     if (typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(() => this.resize());
-      this.resizeObserver.observe(this.canvas);
+      this.resizeObserver.observe(this.canvas.parentElement ?? this.canvas);
     }
+
+    this.watchDpr();
+    this.watchMotionPreference();
   }
 
   private readonly onWindowResize = (): void => {
     this.resize();
+  };
+
+  private readonly onVisibilityChange = (): void => {
+    // Force a fresh frame (and a valid dt) when the tab becomes visible again.
+    this.lastTime = performance.now() / 1000;
+    this.lastRenderAt = 0;
+  };
+
+  private watchDpr(): void {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+    this.dprQuery?.removeEventListener('change', this.onDprChange);
+    const dpr = window.devicePixelRatio || 1;
+    this.dprQuery = window.matchMedia(`(resolution: ${dpr}dppx)`);
+    this.dprQuery.addEventListener('change', this.onDprChange);
+  }
+
+  private readonly onDprChange = (): void => {
+    this.watchDpr();
+    this.resize();
+  };
+
+  private watchMotionPreference(): void {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+    this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    this.prefersReducedMotion = this.motionQuery.matches;
+    this.motionQuery.addEventListener('change', this.onMotionPreferenceChange);
+  }
+
+  private readonly onMotionPreferenceChange = (event: MediaQueryListEvent): void => {
+    this.prefersReducedMotion = event.matches;
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
@@ -582,7 +731,9 @@ export class JarStage {
 
     this.setHovered(null);
     this.callbacks.onJarSelect(jarId);
-    this.jars.get(jarId)?.mesh.setShake(0.9, now);
+    if (!this.prefersReducedMotion) {
+      this.jars.get(jarId)?.mesh.setShake(0.9, now);
+    }
     this.startPhase('picking', DURATIONS.picking, now);
   }
 
@@ -594,7 +745,10 @@ export class JarStage {
     this.unfoldT = 0;
     this.replayMode = true;
 
-    this.jars.get(this.activeId)?.mesh.setShake(0.75, now);
+    this.jars.get(this.activeId)?.mesh.setShake(
+      this.prefersReducedMotion ? 0 : 0.75,
+      now,
+    );
     this.startPhase('extracting', DURATIONS.replayExtract, now);
   }
 
@@ -623,11 +777,19 @@ export class JarStage {
 
   private readonly tick = (timestamp: number): void => {
     this.rafId = requestAnimationFrame(this.tick);
+    if (document.hidden) return;
 
     const now = timestamp / 1000;
     if (this.lastTime === 0) this.lastTime = now;
     const dt = clamp(now - this.lastTime, 0, 0.05);
     this.lastTime = now;
+
+    // Calm the loop while nothing moves: idle scenes only need ~30fps.
+    const idling = this.phase === 'idle' && this.hoveredId === null;
+    if (idling && this.lastRenderAt > 0 && now - this.lastRenderAt < IDLE_FRAME_INTERVAL) {
+      return;
+    }
+    this.lastRenderAt = now;
 
     this.updatePhase(now);
     this.updateScene(now, dt);
@@ -745,16 +907,40 @@ export class JarStage {
       runtime.shadowMaterial.opacity = active ? 0.36 * (1 - selection * 0.85) : 0.36;
     }
 
-    for (const star of this.stars) {
-      const twinkle =
-        0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * star.speed + star.phase));
-      star.material.opacity = star.baseOpacity * twinkle;
-      star.mesh.position.x =
-        star.baseX + Math.sin(time * star.driftSpeed + star.phase) * star.driftAmp;
-      star.mesh.position.y =
-        star.baseY +
-        Math.cos(time * star.driftSpeed * 0.8 + star.phase) * star.driftAmp * 0.7;
-      star.mesh.scale.setScalar(star.size * (0.9 + twinkle * 0.25));
+    const stars = this.starMesh;
+    if (stars) {
+      for (let i = 0; i < this.stars.length; i += 1) {
+        const star = this.stars[i];
+        const speed = this.prefersReducedMotion ? star.speed * 0.12 : star.speed;
+        const twinkle =
+          0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * speed + star.phase));
+        const drift = this.prefersReducedMotion ? 0 : 1;
+
+        this.starDummy.position.set(
+          star.baseX +
+            Math.sin(time * star.driftSpeed + star.phase) * star.driftAmp * drift,
+          star.baseY +
+            Math.cos(time * star.driftSpeed * 0.8 + star.phase) *
+              star.driftAmp *
+              0.7 *
+              drift,
+          star.z,
+        );
+        this.starDummy.scale.setScalar(star.size * (0.6 + 0.55 * twinkle));
+        this.starDummy.rotation.set(0, 0, 0);
+        this.starDummy.updateMatrix();
+        stars.setMatrixAt(i, this.starDummy.matrix);
+
+        // Basic materials have no per-instance opacity: dim toward the stage
+        // background instead (matches the old per-star alpha closely).
+        this.starTint
+          .copy(this.stageBgColor)
+          .lerp(star.color, clamp01(star.baseOpacity * twinkle));
+        stars.setColorAt(i, this.starTint);
+      }
+
+      stars.instanceMatrix.needsUpdate = true;
+      if (stars.instanceColor) stars.instanceColor.needsUpdate = true;
     }
   }
 
@@ -768,7 +954,13 @@ export class JarStage {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
 
+    this.dprQuery?.removeEventListener('change', this.onDprChange);
+    this.dprQuery = null;
+    this.motionQuery?.removeEventListener('change', this.onMotionPreferenceChange);
+    this.motionQuery = null;
+
     window.removeEventListener('resize', this.onWindowResize);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.canvas.removeEventListener('pointermove', this.onPointerMove);
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
     this.canvas.removeEventListener('pointerup', this.onPointerUp);
@@ -778,6 +970,8 @@ export class JarStage {
     for (const runtime of this.jarList) {
       runtime.mesh.dispose();
     }
+
+    this.starMesh?.dispose();
 
     this.scene.traverse((object) => {
       const mesh = object as THREE.Mesh;
@@ -792,6 +986,7 @@ export class JarStage {
     });
 
     this.starGeometry.dispose();
+    this.backdropGeometry.dispose();
     this.shelfGeometry.dispose();
     this.shadowGeometry.dispose();
     this.renderer.dispose();
